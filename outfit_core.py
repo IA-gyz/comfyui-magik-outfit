@@ -110,7 +110,7 @@ def parse_state(text):
     """
     try:
         data = json.loads(text) if isinstance(text, str) and text.strip() else {}
-    except ValueError:
+    except (ValueError, RecursionError):
         return None, {}
     if not isinstance(data, dict):
         return None, {}
@@ -161,15 +161,26 @@ def resolve(outfit, overrides, pieces):
 
 def build_string(slot_map, outfit, modified, mannequin, pieces, fmt="tags",
                  separator=", ", prefix=""):
-    """Assemble the output STRING from a resolved {slot: piece_id} map."""
+    """Assemble the output STRING from a resolved {slot: piece_id} map.
+
+    Slots hidden by another selected piece's `hides` are omitted (the same rule
+    draw_list applies), so the text describes what is drawn.
+    """
     fmt = fmt if fmt in FORMATS else "tags"
     sep = _unescape(separator if isinstance(separator, str) else ", ")
     lead = ""
     if outfit and not modified:
         lead = _clean_text(outfit.get("prefix", ""), MAX_LABEL)
 
+    hidden = set()
+    for pid in slot_map.values():
+        p = pieces.get(pid)
+        if p:
+            hidden.update(p.get("hides", []))
     tags, natural = ([lead] if lead else []), ([lead] if lead else [])
     for slot in mannequin.get("output_order", []):
+        if slot in hidden:
+            continue
         piece = pieces.get(slot_map.get(slot))
         if not piece:
             continue
@@ -282,9 +293,24 @@ class Catalog:
     def _load(self):
         warnings = []
         mannequin = _read_json(os.path.join(self.builtin_dir, "data", "mannequin.json"), None)
-        if not isinstance(mannequin, dict) or "slots" not in mannequin or "base" not in mannequin:
+        if not isinstance(mannequin, dict) or "slots" not in mannequin \
+                or not isinstance(mannequin.get("base"), str) or not mannequin["base"]:
             raise CatalogError("data/mannequin.json is missing or invalid")
-        selectable = {n for n, s in mannequin["slots"].items() if s.get("selectable")}
+        for key in ("canvas", "tile"):
+            size = mannequin.get(key)
+            if not (isinstance(size, list) and len(size) == 2
+                    and all(isinstance(v, int) and not isinstance(v, bool) and v > 0 for v in size)):
+                raise CatalogError(f"data/mannequin.json: '{key}' must be [width, height]")
+        slots = mannequin["slots"]
+        if not isinstance(slots, dict):
+            raise CatalogError("data/mannequin.json: 'slots' must be an object")
+        for name, s in slots.items():
+            if not isinstance(s, dict) or not isinstance(s.get("z"), int) or isinstance(s.get("z"), bool):
+                raise CatalogError(f"data/mannequin.json: slot '{name}' needs an integer 'z'")
+        for required in ("body", "back"):
+            if required not in slots:
+                raise CatalogError(f"data/mannequin.json: missing the required slot '{required}'")
+        selectable = {n for n, s in slots.items() if s.get("selectable")}
 
         pieces, outfits = OrderedDict(), OrderedDict()
         for source in SOURCES:

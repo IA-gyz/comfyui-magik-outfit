@@ -84,6 +84,11 @@ def main():
                 errors.append(f"{oid}: piece '{pid}' is slot '{p['slot']}', listed under '{slot}'")
             elif any(c in o["pieces"] for c in p.get("conflicts", [])):
                 errors.append(f"{oid}: '{pid}' conflicts with another piece in the same outfit")
+            if p is not None:
+                for h in p.get("hides", []):
+                    if h in o["pieces"]:
+                        warnings.append(f"{oid}: '{pid}' hides '{h}', which is also in the outfit "
+                                        f"(omitted from the tile and the output string)")
         if o.get("tile") and not os.path.isfile(os.path.join(ASSETS, o["tile"])):
             warnings.append(f"{oid}: tile not baked yet ({o['tile']}); run bake_tiles.py")
 

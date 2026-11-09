@@ -155,9 +155,15 @@ export function buildString(slotMap, outfit, modified, catalog, pieces, fmt = "t
   if (!FORMATS.includes(fmt)) fmt = "tags";
   const sep = unescapeSep(typeof separator === "string" ? separator : ", ");
   const lead = outfit && !modified ? cleanText(outfit.prefix ?? "", MAX_LABEL) : "";
+  const hidden = new Set();
+  for (const id of Object.values(slotMap)) {
+    const p = pieces.get(id);
+    if (p) for (const s of p.hides) hidden.add(s);
+  }
   const tags = lead ? [lead] : [];
   const natural = lead ? [lead] : [];
   for (const slot of catalog.output_order || []) {
+    if (hidden.has(slot)) continue;
     const piece = pieces.get(slotMap[slot]);
     if (!piece) continue;
     if (pyStrip(piece.tags)) tags.push(pyStrip(piece.tags));
