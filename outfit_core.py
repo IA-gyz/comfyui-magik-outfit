@@ -76,7 +76,7 @@ def _read_list_strict(path, what):
 def _write_json_atomic(path, obj):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     tmp = path + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
+    with open(tmp, "w", encoding="utf-8", newline="\n") as f:  # LF on every OS: files stay byte-stable
         json.dump(obj, f, indent=2, ensure_ascii=False)
         f.write("\n")
     os.replace(tmp, path)

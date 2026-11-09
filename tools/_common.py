@@ -25,7 +25,7 @@ def load_json(name):
 def save_json(name, obj):
     path = os.path.join(DATA, name)
     tmp = path + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
+    with open(tmp, "w", encoding="utf-8", newline="\n") as f:  # LF on every OS: files stay byte-stable
         json.dump(obj, f, indent=2, ensure_ascii=False)
         f.write("\n")
     os.replace(tmp, path)

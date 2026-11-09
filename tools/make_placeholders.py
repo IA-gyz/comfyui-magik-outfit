@@ -174,7 +174,8 @@ def catalog_fingerprint():
     for path in sorted(p for p in paths if os.path.isfile(p)):
         digest.update(os.path.relpath(path, os.path.dirname(DATA)).replace(os.sep, "/").encode())
         with open(path, "rb") as f:
-            digest.update(f.read())
+            # normalize line endings: a Windows checkout (autocrlf) must hash the same as the committed LF files
+            digest.update(f.read().replace(b"\r\n", b"\n"))
     return digest.hexdigest()
 
 

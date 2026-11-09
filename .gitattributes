@@ -1,0 +1,5 @@
+# keep text files byte-stable across platforms (the placeholder fingerprint hashes data/*.json)
+* text=auto eol=lf
+*.webp binary
+*.png binary
+*.pyc binary
