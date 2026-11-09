@@ -23,9 +23,12 @@ def load_json(name):
 
 
 def save_json(name, obj):
-    with open(os.path.join(DATA, name), "w", encoding="utf-8") as f:
+    path = os.path.join(DATA, name)
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
         json.dump(obj, f, indent=2, ensure_ascii=False)
         f.write("\n")
+    os.replace(tmp, path)
 
 
 def load_catalog():
