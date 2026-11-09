@@ -59,6 +59,36 @@ def main():
                     if not (isinstance(attire.get(required), list) and attire[required]):
                         errors.append(f"attire.json: missing non-empty pool '{required}'")
 
+    presets_path = os.path.join(DATA, "presets.json")
+    if not os.path.isfile(presets_path):
+        warnings.append("presets.json not found; the Presets browser tab is disabled")
+    else:
+        try:
+            presets = load_json("presets.json")
+        except (OSError, ValueError) as e:
+            errors.append(f"presets.json: cannot be read ({e.__class__.__name__})")
+        else:
+            if not isinstance(presets, list):
+                errors.append("presets.json: expected a JSON list")
+            else:
+                pids = set()
+                for p in presets:
+                    if not isinstance(p, dict):
+                        errors.append("presets.json: entry is not an object")
+                        continue
+                    pid = p.get("id", "<no id>")
+                    if pid in pids:
+                        errors.append(f"duplicate preset id: {pid}")
+                    pids.add(pid)
+                    if not (isinstance(p.get("name"), str) and p["name"].strip()):
+                        errors.append(f"{pid}: empty name")
+                    if not (isinstance(p.get("tags"), str) and p["tags"].strip()):
+                        errors.append(f"{pid}: empty tags")
+                    prev = p.get("preview")
+                    if prev and not str(prev).startswith(("https://", "http://")):
+                        warnings.append(f"{pid}: preview is not an http(s) URL ({prev!r})")
+                print(f"{len(presets)} presets checked")
+
     for slot in mannequin.get("output_order", []):
         if slot not in selectable:
             errors.append(f"output_order: '{slot}' is not a selectable slot")

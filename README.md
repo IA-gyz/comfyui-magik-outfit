@@ -28,7 +28,7 @@ Saved outfits go to `<ComfyUI user dir>/magik_outfit/`; extra pieces can be adde
 - `outfit_core.py` catalog, selection (`resolve`), string assembly, compositing (no ComfyUI imports)
 - `outfit_routes.py` aiohttp routes; `magik_outfit.py` the V3 node
 - `web/outfit_logic.js` JS mirror of the Python logic; `web/outfit_ui.js` the picker; `web/magik_outfit.js` wiring
-- `data/` catalog JSON (`mannequin.json`, `pieces.json`, `outfits.json`, `attire.json`);
+- `data/` catalog JSON (`mannequin.json`, `pieces.json`, `outfits.json`, `attire.json`, `presets.json`);
   `assets/` mannequin, piece layers and baked tiles (512x1024 WebP with alpha)
 
 ## Random sources
@@ -42,6 +42,14 @@ The Random button draws from `random_source`:
   appears in a catalog piece's `tags` selects that piece (so it shows in the preview); any
   other slot becomes a tag-only entry `{"tags": "..."}`, shown in accent italics on the chip -
   it goes into the output string but cannot be baked into a saved outfit tile.
+
+## Presets browser
+`data/presets.json` holds 430 curated clothing presets (bilingual names, tags, categories,
+traits, preview image) from [Comfyui-Anima-Tools](https://github.com/nregret/Comfyui-Anima-Tools)
+(MIT, (c) nregret). The picker's **Presets** tab browses them with search (name/tags, EN+ZH),
+category chips, sorting and paging; preview images are referenced from the author's CDN
+(jsDelivr `Dressing-doll` repo) rather than bundled. Clicking a preset maps its tags onto
+catalog pieces where possible (`preset_to_slot_map`) and tag-only slots otherwise.
 - `tools/` `make_placeholders.py`, `bake_tiles.py`, `validate_catalog.py`, and the art pipeline (`art.py`, `art_pipeline/`)
 
 ## Making the real art (`tools/art.py`)
