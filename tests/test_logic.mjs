@@ -226,3 +226,19 @@ test("preset search matches bilingual names and tags", () => {
   assert.ok(!L.presetMatches(all[0], "zzz-no-such-thing"));
   assert.ok(L.presetCategories(all).length >= 5);
 });
+
+test("i18n: t() falls back to the English key; zh follows Comfy.Locale", async () => {
+  const I = await loadWebModules().import("i18n.js");
+  assert.equal(I.t("Random"), "Random"); // no app in scope -> en -> the key itself
+  assert.equal(I.t('Saved “{label}”.', { label: "X" }), 'Saved “X”.');
+  globalThis.app = { ui: { settings: { getSettingValue: () => "zh-CN" } } };
+  try {
+    assert.equal(I.getLanguage(), "zh");
+    assert.equal(I.t("Random"), "随机");
+    assert.equal(I.t('Saved “{label}”.', { label: "X" }), "已保存“X”。");
+    assert.equal(I.t("untranslated key"), "untranslated key");
+  } finally {
+    delete globalThis.app;
+  }
+  assert.equal(I.t("Random"), "Random");
+});
