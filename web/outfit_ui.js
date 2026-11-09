@@ -6,14 +6,15 @@ import {
   isModified, parseState, pickPiece, presetCategories, presetMatches, presetToSlotMap, resolve,
   serializeState,
 } from "./outfit_logic.js";
+import { t } from "./i18n.js";
 
 const FAV_KEY = "magik_outfit.favorites";
 const ALPHA_CACHE_MAX = 24;
 const PAGE_SIZE = 24;
-const SLOT_LABELS = { onepiece: "One-piece" };
+const SLOT_LABELS = { onepiece: () => t("One-piece") };
 
 export function slotLabel(slot) {
-  if (Object.prototype.hasOwnProperty.call(SLOT_LABELS, slot)) return SLOT_LABELS[slot];
+  if (Object.prototype.hasOwnProperty.call(SLOT_LABELS, slot)) return SLOT_LABELS[slot]();
   return slot.charAt(0).toUpperCase() + slot.slice(1);
 }
 
@@ -182,18 +183,18 @@ export function createOutfitUI(deps) {
   // --------------------------------------------------------------- DOM
   const root = el(doc, "div", { class: "mo-root", tabindex: "-1" });
   const titleEl = el(doc, "span", { class: "mo-title" });
-  const btnRandom = el(doc, "button", { class: "mo-btn", type: "button", "data-action": "random", text: "Random", title: "Pick a random outfit (respects the filters below)", onClick: randomOutfit });
-  const btnReset = el(doc, "button", { class: "mo-btn", type: "button", "data-action": "reset", text: "Reset", title: "Back to the outfit as it was", onClick: () => { const { outfit } = current(); if (outfit) commit(outfit.id, {}); } });
-  const btnClear = el(doc, "button", { class: "mo-btn", type: "button", "data-action": "clear", text: "Clear", title: "Remove every piece", onClick: () => commit(null, {}) });
-  const btnSave = el(doc, "button", { class: "mo-btn", type: "button", "data-action": "save", text: "Save as outfit…", onClick: openSave });
-  const btnReload = el(doc, "button", { class: "mo-btn mo-btn-icon", type: "button", "data-action": "reload", text: "↻", title: "Reload catalog", "aria-label": "Reload catalog", onClick: () => loadCatalog(true) });
+  const btnRandom = el(doc, "button", { class: "mo-btn", type: "button", "data-action": "random", text: t("Random"), title: t("Pick a random outfit (respects the filters below)"), onClick: randomOutfit });
+  const btnReset = el(doc, "button", { class: "mo-btn", type: "button", "data-action": "reset", text: t("Reset"), title: t("Back to the outfit as it was"), onClick: () => { const { outfit } = current(); if (outfit) commit(outfit.id, {}); } });
+  const btnClear = el(doc, "button", { class: "mo-btn", type: "button", "data-action": "clear", text: t("Clear"), title: t("Remove every piece"), onClick: () => commit(null, {}) });
+  const btnSave = el(doc, "button", { class: "mo-btn", type: "button", "data-action": "save", text: t("Save as outfit…"), onClick: openSave });
+  const btnReload = el(doc, "button", { class: "mo-btn mo-btn-icon", type: "button", "data-action": "reload", text: t("↻"), title: t("Reload catalog"), "aria-label": "Reload catalog", onClick: () => loadCatalog(true) });
   const header = el(doc, "div", { class: "mo-header" }, [titleEl, el(doc, "span", { class: "mo-spacer" }), btnRandom, btnReset, btnClear, btnSave, btnReload]);
 
   const canvas = el(doc, "canvas", { class: "mo-canvas", width: "256", height: "512" });
-  const hint = el(doc, "div", { class: "mo-hint", text: "" });
+  const hint = el(doc, "div", { class: "mo-hint", text: t("") });
   const stage = el(doc, "div", { class: "mo-stage" }, [canvas, hint]);
   const chipsEl = el(doc, "div", { class: "mo-chips" });
-  const stringEl = el(doc, "pre", { class: "mo-string", title: "Output of this node" });
+  const stringEl = el(doc, "pre", { class: "mo-string", title: t("Output of this node") });
   const side = el(doc, "div", { class: "mo-side" }, [chipsEl, stringEl]);
   const main = el(doc, "div", { class: "mo-main" }, [stage, side]);
 
@@ -201,29 +202,29 @@ export function createOutfitUI(deps) {
   const pickerGrid = el(doc, "div", { class: "mo-picker-grid" });
   const picker = el(doc, "div", { class: "mo-panel mo-picker", hidden: true }, [
     el(doc, "div", { class: "mo-panel-head" }, [pickerTitle, el(doc, "span", { class: "mo-spacer" }),
-      el(doc, "button", { class: "mo-btn mo-btn-icon", type: "button", "data-action": "close-picker", text: "×", "aria-label": "Close", onClick: closePicker })]),
+      el(doc, "button", { class: "mo-btn mo-btn-icon", type: "button", "data-action": "close-picker", text: t("×"), "aria-label": "Close", onClick: closePicker })]),
     pickerGrid,
   ]);
 
-  const saveInput = el(doc, "input", { class: "mo-input", type: "text", maxlength: "60", placeholder: "Outfit name", "data-role": "save-name" });
+  const saveInput = el(doc, "input", { class: "mo-input", type: "text", maxlength: "60", placeholder: t("Outfit name"), "data-role": "save-name" });
   const saveError = el(doc, "div", { class: "mo-error" });
   const savePanel = el(doc, "div", { class: "mo-panel mo-save", hidden: true }, [
     el(doc, "div", { class: "mo-save-row" }, [saveInput,
-      el(doc, "button", { class: "mo-btn", type: "button", "data-action": "confirm-save", text: "Save", onClick: doSave }),
-      el(doc, "button", { class: "mo-btn", type: "button", "data-action": "cancel-save", text: "Cancel", onClick: closeSave })]),
+      el(doc, "button", { class: "mo-btn", type: "button", "data-action": "confirm-save", text: t("Save"), onClick: doSave }),
+      el(doc, "button", { class: "mo-btn", type: "button", "data-action": "cancel-save", text: t("Cancel"), onClick: closeSave })]),
     saveError,
   ]);
   saveInput.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); doSave(); } });
 
-  const tabOutfits = el(doc, "button", { class: "mo-chipbtn is-on", type: "button", "data-role": "tab-outfits", text: "Outfits", onClick: () => setTab("outfits") });
-  const tabPresets = el(doc, "button", { class: "mo-chipbtn", type: "button", "data-role": "tab-presets", text: "Presets", onClick: () => setTab("presets") });
-  const tabMy = el(doc, "button", { class: "mo-chipbtn", type: "button", "data-role": "tab-my", text: "My presets", hidden: true, onClick: () => setTab("my") });
+  const tabOutfits = el(doc, "button", { class: "mo-chipbtn is-on", type: "button", "data-role": "tab-outfits", text: t("Outfits"), onClick: () => setTab("outfits") });
+  const tabPresets = el(doc, "button", { class: "mo-chipbtn", type: "button", "data-role": "tab-presets", text: t("Presets"), onClick: () => setTab("presets") });
+  const tabMy = el(doc, "button", { class: "mo-chipbtn", type: "button", "data-role": "tab-my", text: t("My presets"), hidden: true, onClick: () => setTab("my") });
   const tabsEl = el(doc, "div", { class: "mo-tabs" }, [tabOutfits, tabPresets, tabMy]);
-  const searchEl = el(doc, "input", { class: "mo-input mo-search", type: "search", placeholder: "Search outfits…", "data-role": "search", onInput: () => { query = searchEl.value; page = 0; renderGrid(); } });
+  const searchEl = el(doc, "input", { class: "mo-input mo-search", type: "search", placeholder: t("Search outfits…"), "data-role": "search", onInput: () => { query = searchEl.value; page = 0; renderGrid(); } });
   const sortEl = el(doc, "select", { class: "mo-input mo-sort", "data-role": "sort", onChange: () => { sortMode = sortEl.value; page = 0; renderGrid(); } },
-    ["default", "name-asc", "name-desc", "fav", "random"].map((v) => el(doc, "option", { value: v, text: v })));
+    ["default", "name-asc", "name-desc", "fav", "random"].map((v) => el(doc, "option", { value: v, text: t(v) })));
   sortEl.value = "default";
-  const favBtn = el(doc, "button", { class: "mo-chipbtn", type: "button", "data-role": "fav-filter", text: "★ Favorites", "aria-pressed": "false", onClick: () => { favOnly = !favOnly; favBtn.classList.toggle("is-on", favOnly); favBtn.setAttribute("aria-pressed", String(favOnly)); page = 0; renderGroupFilter(); renderGrid(); } });
+  const favBtn = el(doc, "button", { class: "mo-chipbtn", type: "button", "data-role": "fav-filter", text: t("★ Favorites"), "aria-pressed": "false", onClick: () => { favOnly = !favOnly; favBtn.classList.toggle("is-on", favOnly); favBtn.setAttribute("aria-pressed", String(favOnly)); page = 0; renderGroupFilter(); renderGrid(); } });
   const groupEl = el(doc, "select", { class: "mo-input mo-group", "data-role": "group-filter", hidden: true, onChange: () => { favGroup = groupEl.value; page = 0; renderGrid(); } });
   const stylesEl = el(doc, "div", { class: "mo-styles" });
   const toolbar = el(doc, "div", { class: "mo-toolbar" }, [searchEl, sortEl, favBtn, groupEl, stylesEl]);
@@ -233,20 +234,20 @@ export function createOutfitUI(deps) {
     groupEl.hidden = !show;
     if (!show) return;
     groupEl.replaceChildren(...["all", ...favGroups.map((g) => g.id)].map((id) =>
-      el(doc, "option", { value: id, text: id === "all" ? "All favorites" : (favGroups.find((g) => g.id === id)?.name || id) })));
+      el(doc, "option", { value: id, text: id === "all" ? t("All favorites") : (favGroups.find((g) => g.id === id)?.name || id) })));
     if (![...groupEl.options].some((o) => o.value === favGroup)) favGroup = "all";
     groupEl.value = favGroup;
   }
   const gridEl = el(doc, "div", { class: "mo-grid" });
-  const pagerPrev = el(doc, "button", { class: "mo-btn mo-btn-icon", type: "button", "data-role": "page-prev", text: "‹", title: "Previous page", onClick: () => { if (page > 0) { page--; renderGrid(); } } });
-  const pagerNext = el(doc, "button", { class: "mo-btn mo-btn-icon", type: "button", "data-role": "page-next", text: "›", title: "Next page", onClick: () => { page++; renderGrid(); } });
-  const pagerLabel = el(doc, "span", { class: "mo-page-label", text: "" });
+  const pagerPrev = el(doc, "button", { class: "mo-btn mo-btn-icon", type: "button", "data-role": "page-prev", text: t("‹"), title: t("Previous page"), onClick: () => { if (page > 0) { page--; renderGrid(); } } });
+  const pagerNext = el(doc, "button", { class: "mo-btn mo-btn-icon", type: "button", "data-role": "page-next", text: t("›"), title: t("Next page"), onClick: () => { page++; renderGrid(); } });
+  const pagerLabel = el(doc, "span", { class: "mo-page-label", text: t("") });
   const pagerEl = el(doc, "div", { class: "mo-pager", hidden: true }, [pagerPrev, pagerLabel, pagerNext]);
-  const myPresetNameEl = el(doc, "input", { class: "mo-input", type: "text", maxlength: "80", placeholder: "Preset name", "data-role": "mypreset-name" });
-  const myPresetCoverEl = el(doc, "input", { class: "mo-input mo-cover", type: "file", accept: "image/*", "data-role": "mypreset-cover", title: "Optional cover image (converted to WebP)" });
+  const myPresetNameEl = el(doc, "input", { class: "mo-input", type: "text", maxlength: "80", placeholder: t("Preset name"), "data-role": "mypreset-name" });
+  const myPresetCoverEl = el(doc, "input", { class: "mo-input mo-cover", type: "file", accept: "image/*", "data-role": "mypreset-cover", title: t("Optional cover image (converted to WebP)") });
   const myFormEl = el(doc, "div", { class: "mo-myform", hidden: true }, [
     myPresetNameEl, myPresetCoverEl,
-    el(doc, "button", { class: "mo-btn", type: "button", "data-action": "save-mypreset", text: "Save current as preset", onClick: () => { doSaveMyPreset(); } }),
+    el(doc, "button", { class: "mo-btn", type: "button", "data-action": "save-mypreset", text: t("Save current as preset"), onClick: () => { doSaveMyPreset(); } }),
   ]);
   const statusEl = el(doc, "div", { class: "mo-status" });
   const browser = el(doc, "div", { class: "mo-browser" }, [tabsEl, toolbar, myFormEl, gridEl, pagerEl]);
@@ -321,22 +322,22 @@ export function createOutfitUI(deps) {
 
   function renderHeader() {
     if (!idx) {
-      titleEl.textContent = loadFailed ? "Catalog unavailable" : "Loading…";
+      titleEl.textContent = loadFailed ? t("Catalog unavailable") : t("Loading…");
       btnReset.disabled = btnClear.disabled = btnSave.disabled = true;
       return;
     }
     const { outfit, slotMap, modified } = current();
     const count = Object.keys(slotMap).length;
     const hasRaw = Object.values(slotMap).some((v) => v !== null && typeof v === "object");
-    if (outfit) titleEl.textContent = modified ? `Custom (based on ${outfit.label})` : outfit.label;
-    else if (outfitId) titleEl.textContent = `Outfit “${outfitId}” not found`;
-    else titleEl.textContent = count ? "Custom set" : "No outfit selected";
+    if (outfit) titleEl.textContent = modified ? t("Custom (based on {label})", { label: outfit.label }) : outfit.label;
+    else if (outfitId) titleEl.textContent = t("Outfit “{id}” not found", { id: outfitId });
+    else titleEl.textContent = count ? t("Custom set") : t("No outfit selected");
     btnReset.disabled = !(outfit && modified);
     btnClear.disabled = count === 0;
     btnSave.disabled = !(modified && count > 0 && catalog.can_save) || hasRaw;
-    btnSave.title = hasRaw ? "Tag-only slots have no art to bake; remove them before saving"
-      : catalog.can_save ? "Keep this custom set as a new outfit tile"
-      : "Saving is unavailable (no user directory)";
+    btnSave.title = hasRaw ? t("Tag-only slots have no art to bake; remove them before saving")
+      : catalog.can_save ? t("Keep this custom set as a new outfit tile")
+      : t("Saving is unavailable (no user directory)");
     btnRandom.disabled = false;
   }
 
@@ -354,7 +355,7 @@ export function createOutfitUI(deps) {
       const row = el(doc, "div", {
         class: "mo-chip" + (piece || rawTags ? "" : " is-empty") + (rawTags ? " is-raw" : "") + (changed ? " is-changed" : ""),
         "data-slot": slot, role: "button", tabindex: "0",
-        title: `Change ${slotLabel(slot).toLowerCase()}`,
+        title: t("Change {slot}", { slot: slotLabel(slot).toLowerCase() }),
         onClick: () => openPicker(slot),
         onKeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openPicker(slot); } },
       }, [
@@ -363,8 +364,8 @@ export function createOutfitUI(deps) {
       ]);
       if (piece || rawTags) {
         row.append(el(doc, "button", {
-          class: "mo-chip-clear", type: "button", "data-clear": slot, text: "×",
-          title: `Remove ${slotLabel(slot).toLowerCase()}`, "aria-label": `Remove ${slotLabel(slot)}`,
+          class: "mo-chip-clear", type: "button", "data-clear": slot, text: t("×"),
+          title: t("Remove {slot}", { slot: slotLabel(slot).toLowerCase() }), "aria-label": t("Remove {slot}", { slot: slotLabel(slot) }),
           onClick: (e) => { e.stopPropagation(); setPiece(slot, null); },
         }));
       }
@@ -379,7 +380,7 @@ export function createOutfitUI(deps) {
     const { outfit, slotMap, modified } = current();
     const o = getOptions();
     const text = buildString(slotMap, outfit, modified, catalog, idx.pieces, o.format, o.separator, o.prefix);
-    stringEl.textContent = text || "(nothing selected)";
+    stringEl.textContent = text || t("(nothing selected)");
     stringEl.classList.toggle("is-empty", !text);
   }
 
@@ -392,7 +393,7 @@ export function createOutfitUI(deps) {
     try {
       images = await Promise.all(list.map((it) => loadImage(assetURL(it.url))));
     } catch (err) {
-      if (token === renderToken) setStatus(`Preview failed: ${err.message}`, "error");
+      if (token === renderToken) setStatus(t("Preview failed: {msg}", { msg: err.message }), "error");
       return;
     }
     if (token !== renderToken) return; // a newer render superseded this one
@@ -478,10 +479,10 @@ export function createOutfitUI(deps) {
     if (page < 0) page = 0;
     if (!list.length) {
       const empty = tab === "presets"
-        ? ((catalog.presets || []).length ? "No presets match." : "No presets.")
+        ? ((catalog.presets || []).length ? t("No presets match.") : t("No presets."))
         : tab === "my"
-          ? (myPresets.length ? "No presets match." : "No saved presets yet — pick a look and use “Save current as preset”.")
-          : (catalog.outfits.length ? "No outfits match." : "No outfits yet.");
+          ? (myPresets.length ? t("No presets match.") : t("No saved presets yet — pick a look and use “Save current as preset”."))
+          : (catalog.outfits.length ? t("No outfits match.") : t("No outfits yet."));
       gridEl.append(el(doc, "div", { class: "mo-empty", text: empty }));
     } else {
       for (const item of list.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)) {
@@ -519,7 +520,7 @@ export function createOutfitUI(deps) {
   function applyPreset(p) {
     if (!idx) return;
     commit(null, presetToSlotMap(p, idx.pieces, catalog.attire));
-    setStatus(`Applied “${p.name}”.`, "ok");
+    setStatus(t("Applied “{name}”.", { name: p.name }), "ok");
   }
 
   function makeMyPresetCard(p) {
@@ -534,8 +535,8 @@ export function createOutfitUI(deps) {
         : el(doc, "div", { class: "mo-tile-noimg" }),
       el(doc, "span", { class: "mo-tile-label", text: p.name }),
       el(doc, "button", {
-        class: "mo-del", type: "button", "data-del-preset": p.id, text: "×", title: "Delete this preset",
-        "aria-label": `Delete ${p.name}`,
+        class: "mo-del", type: "button", "data-del-preset": p.id, text: t("×"), title: t("Delete this preset"),
+        "aria-label": t("Delete {label}", { label: p.name }),
         onClick: (e) => { e.stopPropagation(); removeMyPreset(p.id); },
       }),
     ]);
@@ -551,8 +552,8 @@ export function createOutfitUI(deps) {
     const { slotMap } = current();
     const tags = buildString(slotMap, null, true, catalog, idx.pieces, "tags", ", ", "");
     const name = myPresetNameEl.value.trim();
-    if (!name) { setStatus("Give the preset a name.", "error"); return; }
-    if (!tags) { setStatus("Select something first.", "error"); return; }
+    if (!name) { setStatus(t("Give the preset a name."), "error"); return; }
+    if (!tags) { setStatus(t("Select something first."), "error"); return; }
     let cover = null;
     const file = myPresetCoverEl.files?.[0];
     if (file && uploadMyPresetCover) {
@@ -571,7 +572,7 @@ export function createOutfitUI(deps) {
     await saveMyPresetsNow();
     myPresetNameEl.value = "";
     myPresetCoverEl.value = "";
-    setStatus(`Saved preset “${name}”.`, "ok");
+    setStatus(t("Saved preset “{name}”.", { name }), "ok");
     renderGrid();
   }
 
@@ -600,8 +601,8 @@ export function createOutfitUI(deps) {
     ]);
     if (o.source === "user") {
       tile.append(el(doc, "button", {
-        class: "mo-del", type: "button", "data-del": o.id, text: "×", title: "Delete this saved outfit",
-        "aria-label": `Delete ${o.label}`, onClick: (e) => { e.stopPropagation(); removeOutfit(o); },
+        class: "mo-del", type: "button", "data-del": o.id, text: t("×"), title: t("Delete this saved outfit"),
+        "aria-label": t("Delete {label}", { label: o.label }), onClick: (e) => { e.stopPropagation(); removeOutfit(o); },
       }));
     }
     return tile;
@@ -648,24 +649,24 @@ export function createOutfitUI(deps) {
     if (!openSlot || !idx) return;
     const slot = openSlot;
     const { slotMap } = current();
-    pickerTitle.textContent = `Choose ${slotLabel(slot).toLowerCase()}`;
+    pickerTitle.textContent = t("Choose {slot}", { slot: slotLabel(slot).toLowerCase() });
     pickerGrid.replaceChildren();
     const none = el(doc, "div", {
       class: "mo-pick is-none" + (slotMap[slot] ? "" : " is-selected"), "data-slot-pick": slot, "data-piece-id": "",
-      role: "button", tabindex: "0", title: `No ${slotLabel(slot).toLowerCase()}`,
+      role: "button", tabindex: "0", title: t("No {slot}", { slot: slotLabel(slot).toLowerCase() }),
       onClick: () => { setPiece(slot, null); closePicker(); },
-    }, [el(doc, "div", { class: "mo-pick-none", text: "∅" }), el(doc, "span", { class: "mo-pick-label", text: "None" })]);
+    }, [el(doc, "div", { class: "mo-pick-none", text: t("∅") }), el(doc, "span", { class: "mo-pick-label", text: t("None") })]);
     pickerGrid.append(none);
     for (const piece of idx.bySlot.get(slot)) {
       const thumb = el(doc, "canvas", { class: "mo-pick-thumb", width: "80", height: "100" });
       const replaces = [...new Set([...piece.conflicts, ...piece.hides])].map((s) => slotLabel(s).toLowerCase());
       const tile = el(doc, "div", {
         class: "mo-pick" + (slotMap[slot] === piece.id ? " is-selected" : ""), "data-piece-id": piece.id,
-        role: "button", tabindex: "0", title: replaces.length ? `${piece.label} (affects ${replaces.join(", ")})` : piece.label,
+        role: "button", tabindex: "0", title: replaces.length ? `${piece.label} ${t("(affects {slots})", { slots: replaces.join(", ") })}` : piece.label,
         onClick: () => { setPiece(slot, piece.id); closePicker(); },
         onKeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setPiece(slot, piece.id); closePicker(); } },
       }, [thumb, el(doc, "span", { class: "mo-pick-label", text: piece.label })]);
-      if (replaces.length) tile.append(el(doc, "span", { class: "mo-pick-note", text: `replaces ${replaces.join(", ")}` }));
+      if (replaces.length) tile.append(el(doc, "span", { class: "mo-pick-note", text: t("replaces {slots}", { slots: replaces.join(", ") }) }));
       pickerGrid.append(tile);
       drawThumb(thumb, piece);
     }
@@ -744,7 +745,7 @@ export function createOutfitUI(deps) {
     const piece = pieceAt(ev);
     setHover(piece ? piece.slot : null);
     canvas.classList.toggle("is-hot", !!piece);
-    hint.textContent = piece ? `${slotLabel(piece.slot)}: ${piece.label}. Click to change` : "";
+    hint.textContent = piece ? `${slotLabel(piece.slot)}: ${piece.label}. ${t("Click to change")}` : "";
   });
   canvas.addEventListener("pointerleave", () => { setHover(null); canvas.classList.remove("is-hot"); hint.textContent = ""; });
   canvas.addEventListener("click", (ev) => { const piece = pieceAt(ev); if (piece) openPicker(piece.slot); });
@@ -756,7 +757,7 @@ export function createOutfitUI(deps) {
     closePicker();
     savePanel.hidden = false;
     saveError.textContent = "";
-    saveInput.value = outfit ? `${outfit.label} custom`.slice(0, 60) : "My outfit";
+    saveInput.value = outfit ? `${outfit.label} ${t("custom")}`.slice(0, 60) : t("My outfit");
     saveInput.focus?.();
     saveInput.select?.();
   }
@@ -765,27 +766,27 @@ export function createOutfitUI(deps) {
 
   async function doSave() {
     const label = saveInput.value.trim();
-    if (!label) { saveError.textContent = "Give the outfit a name."; return; }
+    if (!label) { saveError.textContent = t("Give the outfit a name."); return; }
     const { outfit, slotMap } = current();
     try {
       const res = await saveOutfit({ label, pieces: slotMap, style: outfit ? outfit.style : [], prefix: "" });
       await loadCatalog(true);
       commit(res.outfit.id, {});
       closeSave();
-      setStatus(`Saved “${res.outfit.label}”.`, "ok");
+      setStatus(t("Saved “{label}”.", { label: res.outfit.label }), "ok");
     } catch (err) {
-      saveError.textContent = err.message || "Could not save the outfit.";
+      saveError.textContent = err.message || t("Could not save the outfit.");
     }
   }
 
   async function removeOutfit(o) {
-    if (!confirmFn(`Delete the saved outfit “${o.label}”?`)) return;
+    if (!confirmFn(t("Delete the saved outfit “{label}”?", { label: o.label }))) return;
     const wasSelected = outfitId === o.id;
     const keep = wasSelected ? current().slotMap : null;
     try {
       await deleteOutfit(o.id);
     } catch (err) {
-      setStatus(err.message || "Could not delete the outfit.", "error");
+      setStatus(err.message || t("Could not delete the outfit."), "error");
       return;
     }
     await loadCatalog(true);
@@ -799,7 +800,7 @@ export function createOutfitUI(deps) {
       alphaCache.clear();
       loadImage.clear?.();
     }
-    setStatus("Loading outfits…");
+    setStatus(t("Loading outfits…"));
     try {
       catalog = await fetchCatalog(force);
       idx = indexCatalog(catalog);
@@ -807,7 +808,7 @@ export function createOutfitUI(deps) {
       catalog = null;
       idx = null;
       loadFailed = true;
-      setStatus(`Could not load the outfit catalog: ${err.message}`, "error");
+      setStatus(t("Could not load the outfit catalog: {msg}", { msg: err.message }), "error");
       update();
       return;
     }
@@ -825,7 +826,7 @@ export function createOutfitUI(deps) {
     if (tab === "my" && !myPresetsOk) setTab("outfits");
     await loadFavoritesData();
     const n = catalog.warnings?.length ?? 0;
-    setStatus(n ? `${n} catalog warning${n > 1 ? "s" : ""}: ${catalog.warnings.join("; ")}` : "", n ? "warn" : "");
+    setStatus(n ? t("{n} catalog warning(s): {msg}", { n, msg: catalog.warnings.join("; ") }) : "", n ? "warn" : "");
     if (styleFilter && !collectStyles(catalog.outfits).includes(styleFilter)) styleFilter = null;
     if (openSlot && !idx.bySlot.has(openSlot)) closePicker();
     renderStyles();

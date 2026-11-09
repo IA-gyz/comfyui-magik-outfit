@@ -1,0 +1,41 @@
+{
+  "Magik.Outfit": {
+    "display_name": "Magik 套装",
+    "description": "在中性人台上挑选一整套套装，然后替换任意单品。以文本描述输出套装。",
+    "inputs": {
+      "state": {
+        "name": "state",
+        "tooltip": "选择状态，由套装选择器写入，不建议手动编辑。"
+      },
+      "format": {
+        "name": "格式",
+        "tooltip": "tags：booru 风格标签。natural：自然语言短语。both：先短语，换行后再跟标签。"
+      },
+      "separator": {
+        "name": "分隔符",
+        "tooltip": "连接各单品。\\n 和 \\t 会被转换为换行 / 制表符。"
+      },
+      "prefix": {
+        "name": "前缀",
+        "tooltip": "放在套装文本之前的可选文字，例如 'wearing'。"
+      },
+      "random_source": {
+        "name": "随机来源",
+        "tooltip": "随机抽取的来源：目录套装、内置的 danbooru 服饰标签池（data/attire.json），或两者皆可。"
+      },
+      "randomize": {
+        "name": "运行时随机",
+        "tooltip": "排队时从 random_source 随机抽取一套，代替选择器状态。抽取结果会写回节点并记录到 PNG 元数据。"
+      },
+      "seed": {
+        "name": "种子",
+        "tooltip": "randomize 的种子：-1 表示每次运行重新抽取；固定种子可复现。"
+      }
+    },
+    "outputs": {
+      "outfit": {
+        "name": "outfit"
+      }
+    }
+  }
+}

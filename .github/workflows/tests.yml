@@ -1,0 +1,29 @@
+name: Tests
+on: [push, pull_request]
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - name: Python deps
+        run: python -m pip install pillow numpy aiohttp
+      - name: Node deps (jsdom for the UI tests)
+        run: npm install --no-save --no-package-lock jsdom
+      - name: Python tests
+        run: python -B -m unittest discover -s tests -v
+      - name: JS logic parity tests
+        run: node --test tests/test_logic.mjs
+      - name: JS UI tests (jsdom)
+        run: node --test tests/test_ui.mjs tests/test_wiring.mjs
+        env:
+          JSDOM_DIR: ${{ github.workspace }}

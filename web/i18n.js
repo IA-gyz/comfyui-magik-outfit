@@ -1,0 +1,98 @@
+// Magik Outfit i18n: t() is keyed by the English source string (en needs no table;
+// a missing translation falls back to the key). Language follows ComfyUI's
+// Comfy.Locale setting (any zh* -> zh). Model ported from Comfyui-Anima-Tools (MIT).
+export function getLanguage() {
+  try {
+    const app = globalThis.app;
+    const locale = String(app?.ui?.settings?.getSettingValue?.("Comfy.Locale") || "").toLowerCase();
+    if (locale.includes("zh")) return "zh";
+  } catch { /* settings unavailable (tests, early load): fall through to en */ }
+  return "en";
+}
+
+const TRANSLATIONS = {
+  zh: {
+    "Random": "随机",
+    "Reset": "重置",
+    "Clear": "清空",
+    "Save as outfit…": "保存为套装…",
+    "Reload catalog": "重新加载目录",
+    "Pick a random outfit (respects the filters below)": "随机选择一套套装（遵循下方筛选）",
+    "Back to the outfit as it was": "恢复到原来的套装",
+    "Remove every piece": "移除所有单品",
+    "Close": "关闭",
+    "Outfit name": "套装名称",
+    "Save": "保存",
+    "Cancel": "取消",
+    "Give the outfit a name.": "给套装起个名字。",
+    "Could not save the outfit.": "无法保存套装。",
+    "Delete the saved outfit “{label}”?": "删除已保存的套装“{label}”？",
+    "Could not delete the outfit.": "无法删除套装。",
+    "Search outfits…": "搜索套装…",
+    "Search presets…": "搜索预设…",
+    "★ Favorites": "★ 收藏",
+    "Outfits": "套装",
+    "Presets": "预设",
+    "My presets": "我的预设",
+    "All favorites": "全部收藏",
+    "Preset name": "预设名称",
+    "Optional cover image (converted to WebP)": "可选的封面图（将转换为 WebP）",
+    "Save current as preset": "将当前搭配保存为预设",
+    "Delete this preset": "删除此预设",
+    "Previous page": "上一页",
+    "Next page": "下一页",
+    "default": "默认",
+    "name-asc": "名称 A-Z",
+    "name-desc": "名称 Z-A",
+    "fav": "收藏优先",
+    "random": "随机",
+    "No outfits match.": "没有匹配的套装。",
+    "No outfits yet.": "还没有套装。",
+    "No presets match.": "没有匹配的预设。",
+    "No presets.": "还没有预设。",
+    "No saved presets yet — pick a look and use “Save current as preset”.": "还没有保存的预设——先挑一套搭配，再点“将当前搭配保存为预设”。",
+    "(nothing selected)": "（未选择任何内容）",
+    "Choose {slot}": "选择{slot}",
+    "None": "无",
+    "replaces {slots}": "会替换 {slots}",
+    "Click to change": "点击更换",
+    "Loading…": "加载中…",
+    "Catalog unavailable": "目录不可用",
+    "Loading outfits…": "正在加载套装…",
+    "Could not load the outfit catalog: {msg}": "无法加载套装目录：{msg}",
+    "catalog warning": "目录警告",
+    "Preview failed: {msg}": "预览失败：{msg}",
+    "Keep this custom set as a new outfit tile": "把当前自定义搭配保存为新套装图块",
+    "Saving is unavailable (no user directory)": "无法保存（没有用户目录）",
+    "Tag-only slots have no art to bake; remove them before saving": "纯标签槽没有可烘焙的美术资源，保存前请移除",
+    "Custom (based on {label})": "自定义（基于 {label}）",
+    "Custom set": "自定义搭配",
+    "No outfit selected": "未选择套装",
+    "Saved “{label}”.": "已保存“{label}”。",
+    "Saved preset “{name}”.": "已保存预设“{name}”。",
+    "Give the preset a name.": "给预设起个名字。",
+    "Select something first.": "请先选择一些内容。",
+    "Applied “{name}”.": "已应用“{name}”。",
+    "Change {slot}": "更换{slot}",
+    "Remove {slot}": "移除{slot}",
+    "Add to favorites": "添加到收藏",
+    "Remove from favorites": "取消收藏",
+    "Delete this saved outfit": "删除此已保存套装",
+    "One-piece": "连衣裙",
+    "Outfit “{id}” not found": "找不到套装“{id}”",
+    "Delete {label}": "删除{label}",
+    "{n} catalog warning(s): {msg}": "{n} 条目录警告：{msg}",
+    "(affects {slots})": "（会影响 {slots}）",
+    "custom": "自定义",
+    "My outfit": "我的套装",
+    "No {slot}": "无{slot}",
+  },
+};
+
+export function t(key, values = {}) {
+  let s = TRANSLATIONS[getLanguage()]?.[key] || key;
+  for (const [k, v] of Object.entries(values)) {
+    s = s.replaceAll(`{${k}}`, String(v));
+  }
+  return s;
+}

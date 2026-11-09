@@ -1,0 +1,41 @@
+{
+  "Magik.Outfit": {
+    "display_name": "Magik Outfit",
+    "description": "Pick a whole outfit on a neutral mannequin, then swap any piece. Outputs the outfit as a text description.",
+    "inputs": {
+      "state": {
+        "name": "state",
+        "tooltip": "Selection state, written by the outfit picker. Not meant to be edited by hand."
+      },
+      "format": {
+        "name": "format",
+        "tooltip": "tags: booru-style tags. natural: plain phrases. both: phrases, then a new line with the tags."
+      },
+      "separator": {
+        "name": "separator",
+        "tooltip": "Joins the pieces. \\n and \\t are converted to a new line / tab."
+      },
+      "prefix": {
+        "name": "prefix",
+        "tooltip": "Optional text placed before the outfit, e.g. 'wearing'."
+      },
+      "random_source": {
+        "name": "random_source",
+        "tooltip": "What random draws come from: catalog outfits, the bundled danbooru attire tag pools (data/attire.json), or either."
+      },
+      "randomize": {
+        "name": "randomize",
+        "tooltip": "At queue time, draw a random selection (from random_source) instead of using the picker state. The draw is written back to the node and recorded in the PNG metadata."
+      },
+      "seed": {
+        "name": "seed",
+        "tooltip": "Seed for randomize: -1 draws fresh every run; a fixed seed is reproducible."
+      }
+    },
+    "outputs": {
+      "outfit": {
+        "name": "outfit"
+      }
+    }
+  }
+}

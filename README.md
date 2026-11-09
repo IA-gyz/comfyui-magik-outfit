@@ -119,6 +119,13 @@ Nothing here depends on a particular model: you supply the workflow.
 What is *not* automated: checking that the generated garment really matches its description (run a tagger or
 look at the sheet), and fit between pieces (the `z` and `hides` fields cover most cases).
 
+## i18n and CI
+Node chrome (names/tooltips) is localized via `locales/{en,zh}/nodeDefs.json`; picker UI strings
+go through `web/i18n.js` (`t()` keyed by the English source, following the `Comfy.Locale`
+setting, zh translations included; model from Comfyui-Anima-Tools, MIT).
+CI (`.github/workflows/tests.yml`) runs the Python and node test suites on ubuntu and windows;
+`publish_action.yml` publishes to the Comfy registry when `pyproject.toml` changes.
+
 ## Tests
     python -m unittest discover -s tests -v          # Pillow, numpy, aiohttp (node tests need ComfyUI's comfy_api)
     python tests/make_parity_fixtures.py             # only after changing the catalog or the Python logic
