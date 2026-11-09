@@ -922,8 +922,13 @@ class PipelineTests(unittest.TestCase):
                 for f in sorted(files):
                     path = os.path.join(folder, f)
                     digest.update(os.path.relpath(path, self.root).encode())
-                    with open(path, "rb") as fh:
-                        digest.update(fh.read())
+                    if f.lower().endswith((".webp", ".png")):
+                        # encoded image bytes can differ across platforms/encoders; pixels are the invariant
+                        with Image.open(path) as im:
+                            digest.update(im.convert("RGBA").tobytes())
+                    else:
+                        with open(path, "rb") as fh:
+                            digest.update(fh.read().replace(b"\r\n", b"\n"))  # line endings are not content
         return digest.hexdigest()
 
     def red_square(self, path):
