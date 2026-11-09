@@ -584,6 +584,58 @@ except ImportError:  # pragma: no cover
 
 
 @unittest.skipUnless(HAVE_AIOHTTP, "aiohttp not installed")
+class RandomStateTests(unittest.TestCase):
+    """random_state_text: the queue-time randomize draw."""
+
+    def setUp(self):
+        self.cat, self.tmp = fresh_catalog(False)
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        self.snap = self.cat.get()
+
+    def test_catalog_source_is_an_outfit_id(self):
+        for seed in (1, 2, 3):
+            text = oc.random_state_text(self.cat, "catalog", seed)
+            doc = json.loads(text)
+            self.assertIn(doc["outfit"], self.snap.outfits)
+            self.assertEqual(doc["overrides"], {})
+
+    def test_fixed_seed_is_reproducible(self):
+        a = oc.random_state_text(self.cat, "any", 42)
+        b = oc.random_state_text(self.cat, "any", 42)
+        self.assertEqual(a, b)
+        c = oc.random_state_text(self.cat, "any", 43)
+        self.assertNotEqual(a, c)
+
+    def test_attire_source_draws_tag_slots(self):
+        text = oc.random_state_text(self.cat, "attire", 7)
+        doc = json.loads(text)
+        self.assertIsNone(doc["outfit"])
+        self.assertGreaterEqual(len(doc["overrides"]), 2)
+        for slot, v in doc["overrides"].items():
+            self.assertIn(slot, ("top", "bottom", "onepiece", "accessory", "legwear", "footwear"))
+            self.assertTrue(isinstance(v, str) or (isinstance(v, dict) and set(v) == {"tags"}))
+
+    def test_invalid_source_falls_back_to_catalog(self):
+        doc = json.loads(oc.random_state_text(self.cat, "bogus", 1))
+        self.assertIn(doc["outfit"], self.snap.outfits)
+
+    def test_negative_seed_still_draws(self):
+        doc = json.loads(oc.random_state_text(self.cat, "catalog", -1))
+        self.assertIn(doc["outfit"], self.snap.outfits)
+
+    def test_nothing_to_draw(self):
+        tmp = tempfile.mkdtemp(prefix="magik_empty_")
+        self.addCleanup(shutil.rmtree, tmp, True)
+        shutil.copytree(os.path.join(PKG_DIR, "data"), os.path.join(tmp, "data"))
+        with open(os.path.join(tmp, "data", "outfits.json"), "w", encoding="utf-8") as f:
+            json.dump([], f)
+        cat = oc.Catalog(tmp, None)
+        self.assertIsNone(oc.random_state_text(cat, "catalog", 1))
+        # attire still works with an empty outfit list
+        doc = json.loads(oc.random_state_text(cat, "attire", 1))
+        self.assertGreaterEqual(len(doc["overrides"]), 2)
+
+
 class FavoritesMyPresetsTests(unittest.TestCase):
     """Server-persisted favorites (groups) and the user's own tag presets with covers."""
 

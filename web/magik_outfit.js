@@ -154,6 +154,23 @@ function setupNode(node) {
 
 app.registerExtension({
   name: "Magik.Outfit",
+  async setup() {
+    // randomize-on-run: the backend drew a selection at queue time, show it in the picker
+    api.addEventListener("magik.outfit_resolved", (ev) => {
+      const nodes = ev.detail?.nodes || {};
+      for (const [id, values] of Object.entries(nodes)) {
+        const node = app.graph?.getNodeById?.(Number(id)) ?? app.graph?.getNodeById?.(id);
+        if (!node?._magikOutfit || !values?.state) continue;
+        const w = node.widgets?.find((x) => x.name === "state");
+        if (w) {
+          w.value = values.state;
+          w.callback?.(values.state);
+        }
+        node._magikOutfit.sync();
+        node.setDirtyCanvas?.(true, true);
+      }
+    });
+  },
   nodeCreated(node) {
     if (node.comfyClass === NODE_ID) setupNode(node);
   },
