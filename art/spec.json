@@ -1,0 +1,400 @@
+{
+  "version": 1,
+  "canvas": [
+    512,
+    1024
+  ],
+  "seed": 424242,
+  "prompt": {
+    "template": "Dress the mannequin in {desc}. {hint}Keep the pose, framing, lighting, background and the mannequin itself exactly unchanged. Do not add any other clothing or accessories.",
+    "negative": "extra clothing, other garments, text, watermark, different pose, different background",
+    "slot_hints": {
+      "footwear": "Only change the feet. ",
+      "legwear": "Only change the legs. ",
+      "headwear": "Only change the head. "
+    }
+  },
+  "variants": [
+    {
+      "name": "gray",
+      "base": "base_gray.png"
+    }
+  ],
+  "extract": {
+    "lo": 14,
+    "hi": 40,
+    "region_margin": 24,
+    "min_area": 40,
+    "hole_area": 80,
+    "erode": 0,
+    "max_components": 4,
+    "drift_max": 6.0,
+    "min_pixels": 150,
+    "min_contrast": 40,
+    "max_coverage": 0.45
+  },
+  "regions": {
+    "headwear": [
+      140,
+      0,
+      372,
+      200
+    ],
+    "top": [
+      90,
+      180,
+      422,
+      500
+    ],
+    "outerwear": [
+      80,
+      170,
+      432,
+      520
+    ],
+    "bottom": [
+      140,
+      440,
+      372,
+      960
+    ],
+    "onepiece": [
+      120,
+      170,
+      392,
+      960
+    ],
+    "legwear": [
+      170,
+      540,
+      342,
+      1000
+    ],
+    "footwear": [
+      160,
+      830,
+      352,
+      1024
+    ],
+    "gloves": [
+      60,
+      380,
+      452,
+      520
+    ],
+    "accessory": [
+      0,
+      0,
+      512,
+      1024
+    ]
+  },
+  "pieces": [
+    {
+      "id": "top_tshirt",
+      "slot": "top",
+      "label": "T-shirt",
+      "tags": "t-shirt",
+      "nl": "a t-shirt",
+      "z": null,
+      "hides": [],
+      "conflicts": [],
+      "style": [
+        "casual"
+      ],
+      "colorable": false,
+      "render": {
+        "desc": "a t-shirt"
+      }
+    },
+    {
+      "id": "top_blouse",
+      "slot": "top",
+      "label": "Blouse",
+      "tags": "white shirt, collared shirt",
+      "nl": "a white blouse",
+      "z": null,
+      "hides": [],
+      "conflicts": [],
+      "style": [
+        "school",
+        "formal"
+      ],
+      "colorable": false,
+      "render": {
+        "desc": "a white blouse"
+      }
+    },
+    {
+      "id": "top_hoodie",
+      "slot": "top",
+      "label": "Hoodie",
+      "tags": "hoodie",
+      "nl": "a hoodie",
+      "z": null,
+      "hides": [],
+      "conflicts": [],
+      "style": [
+        "casual",
+        "winter"
+      ],
+      "colorable": false,
+      "render": {
+        "desc": "a hoodie"
+      }
+    },
+    {
+      "id": "outerwear_jacket",
+      "slot": "outerwear",
+      "label": "Jacket",
+      "tags": "jacket, open jacket",
+      "nl": "an open jacket",
+      "z": null,
+      "hides": [],
+      "conflicts": [],
+      "style": [
+        "winter",
+        "casual"
+      ],
+      "colorable": false,
+      "render": {
+        "desc": "an open jacket"
+      }
+    },
+    {
+      "id": "bottom_jeans",
+      "slot": "bottom",
+      "label": "Jeans",
+      "tags": "jeans, denim",
+      "nl": "jeans",
+      "z": null,
+      "hides": [],
+      "conflicts": [],
+      "style": [
+        "casual"
+      ],
+      "colorable": false,
+      "render": {
+        "desc": "jeans"
+      }
+    },
+    {
+      "id": "bottom_pleated_skirt",
+      "slot": "bottom",
+      "label": "Pleated skirt",
+      "tags": "pleated skirt, navy skirt",
+      "nl": "a navy pleated skirt",
+      "z": null,
+      "hides": [],
+      "conflicts": [],
+      "style": [
+        "school"
+      ],
+      "colorable": false,
+      "render": {
+        "desc": "a navy pleated skirt"
+      }
+    },
+    {
+      "id": "bottom_shorts",
+      "slot": "bottom",
+      "label": "Shorts",
+      "tags": "shorts",
+      "nl": "shorts",
+      "z": null,
+      "hides": [],
+      "conflicts": [],
+      "style": [
+        "casual",
+        "summer"
+      ],
+      "colorable": false,
+      "render": {
+        "desc": "shorts"
+      }
+    },
+    {
+      "id": "onepiece_sundress",
+      "slot": "onepiece",
+      "label": "Sundress",
+      "tags": "sundress, yellow dress",
+      "nl": "a yellow sundress",
+      "z": null,
+      "hides": [],
+      "conflicts": [
+        "top",
+        "bottom"
+      ],
+      "style": [
+        "summer"
+      ],
+      "colorable": false,
+      "render": {
+        "desc": "a yellow sundress"
+      }
+    },
+    {
+      "id": "legwear_kneesocks",
+      "slot": "legwear",
+      "label": "Knee socks",
+      "tags": "black kneehighs",
+      "nl": "black knee socks",
+      "z": null,
+      "hides": [],
+      "conflicts": [],
+      "style": [
+        "school"
+      ],
+      "colorable": false,
+      "render": {
+        "desc": "black knee socks"
+      }
+    },
+    {
+      "id": "footwear_sneakers",
+      "slot": "footwear",
+      "label": "Sneakers",
+      "tags": "sneakers",
+      "nl": "white sneakers",
+      "z": null,
+      "hides": [],
+      "conflicts": [],
+      "style": [
+        "casual",
+        "summer"
+      ],
+      "colorable": false,
+      "render": {
+        "desc": "white sneakers"
+      }
+    },
+    {
+      "id": "footwear_loafers",
+      "slot": "footwear",
+      "label": "Loafers",
+      "tags": "loafers",
+      "nl": "brown loafers",
+      "z": null,
+      "hides": [],
+      "conflicts": [],
+      "style": [
+        "school",
+        "formal"
+      ],
+      "colorable": false,
+      "render": {
+        "desc": "brown loafers"
+      }
+    },
+    {
+      "id": "footwear_boots",
+      "slot": "footwear",
+      "label": "Boots",
+      "tags": "boots",
+      "nl": "boots",
+      "z": 55,
+      "hides": [
+        "legwear"
+      ],
+      "conflicts": [],
+      "style": [
+        "winter"
+      ],
+      "colorable": false,
+      "render": {
+        "desc": "boots"
+      }
+    },
+    {
+      "id": "headwear_beret",
+      "slot": "headwear",
+      "label": "Beret",
+      "tags": "beret",
+      "nl": "a red beret",
+      "z": null,
+      "hides": [],
+      "conflicts": [],
+      "style": [
+        "casual"
+      ],
+      "colorable": false,
+      "render": {
+        "desc": "a red beret"
+      }
+    },
+    {
+      "id": "accessory_ribbon",
+      "slot": "accessory",
+      "label": "Neck ribbon",
+      "tags": "neck ribbon",
+      "nl": "a pink neck ribbon",
+      "z": null,
+      "hides": [],
+      "conflicts": [],
+      "style": [
+        "school"
+      ],
+      "colorable": false,
+      "render": {
+        "desc": "a pink neck ribbon"
+      }
+    }
+  ],
+  "outfits": [
+    {
+      "id": "casual_01",
+      "label": "Casual tee",
+      "style": [
+        "casual"
+      ],
+      "pieces": {
+        "top": "top_tshirt",
+        "bottom": "bottom_jeans",
+        "footwear": "footwear_sneakers"
+      },
+      "prefix": ""
+    },
+    {
+      "id": "school_01",
+      "label": "Sailor uniform",
+      "style": [
+        "school"
+      ],
+      "pieces": {
+        "top": "top_blouse",
+        "bottom": "bottom_pleated_skirt",
+        "legwear": "legwear_kneesocks",
+        "footwear": "footwear_loafers",
+        "accessory": "accessory_ribbon"
+      },
+      "prefix": "school uniform"
+    },
+    {
+      "id": "summer_01",
+      "label": "Summer dress",
+      "style": [
+        "summer"
+      ],
+      "pieces": {
+        "onepiece": "onepiece_sundress",
+        "headwear": "headwear_beret",
+        "footwear": "footwear_sneakers"
+      },
+      "prefix": ""
+    },
+    {
+      "id": "winter_01",
+      "label": "Winter layers",
+      "style": [
+        "winter"
+      ],
+      "pieces": {
+        "top": "top_hoodie",
+        "outerwear": "outerwear_jacket",
+        "bottom": "bottom_jeans",
+        "footwear": "footwear_boots"
+      },
+      "prefix": ""
+    }
+  ]
+}

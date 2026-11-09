@@ -1,0 +1,321 @@
+[
+  {
+    "id": "top_tshirt",
+    "slot": "top",
+    "label": "T-shirt",
+    "tags": "t-shirt",
+    "nl": "a t-shirt",
+    "layer": "pieces/top/tshirt.webp",
+    "back_layer": null,
+    "z": null,
+    "hides": [],
+    "conflicts": [],
+    "style": [
+      "casual"
+    ],
+    "colorable": false,
+    "bbox": [
+      138,
+      200,
+      375,
+      441
+    ]
+  },
+  {
+    "id": "top_blouse",
+    "slot": "top",
+    "label": "Blouse",
+    "tags": "white shirt, collared shirt",
+    "nl": "a white blouse",
+    "layer": "pieces/top/blouse.webp",
+    "back_layer": null,
+    "z": null,
+    "hides": [],
+    "conflicts": [],
+    "style": [
+      "school",
+      "formal"
+    ],
+    "colorable": false,
+    "bbox": [
+      140,
+      200,
+      373,
+      431
+    ]
+  },
+  {
+    "id": "top_hoodie",
+    "slot": "top",
+    "label": "Hoodie",
+    "tags": "hoodie",
+    "nl": "a hoodie",
+    "layer": "pieces/top/hoodie.webp",
+    "back_layer": null,
+    "z": null,
+    "hides": [],
+    "conflicts": [],
+    "style": [
+      "casual",
+      "winter"
+    ],
+    "colorable": false,
+    "bbox": [
+      116,
+      160,
+      397,
+      463
+    ]
+  },
+  {
+    "id": "outerwear_jacket",
+    "slot": "outerwear",
+    "label": "Jacket",
+    "tags": "jacket, open jacket",
+    "nl": "an open jacket",
+    "layer": "pieces/outerwear/jacket.webp",
+    "back_layer": null,
+    "z": null,
+    "hides": [],
+    "conflicts": [],
+    "style": [
+      "winter",
+      "casual"
+    ],
+    "colorable": false,
+    "bbox": [
+      110,
+      198,
+      403,
+      453
+    ]
+  },
+  {
+    "id": "bottom_jeans",
+    "slot": "bottom",
+    "label": "Jeans",
+    "tags": "jeans, denim",
+    "nl": "jeans",
+    "layer": "pieces/bottom/jeans.webp",
+    "back_layer": null,
+    "z": null,
+    "hides": [],
+    "conflicts": [],
+    "style": [
+      "casual"
+    ],
+    "colorable": false,
+    "bbox": [
+      190,
+      468,
+      323,
+      931
+    ]
+  },
+  {
+    "id": "bottom_pleated_skirt",
+    "slot": "bottom",
+    "label": "Pleated skirt",
+    "tags": "pleated skirt, navy skirt",
+    "nl": "a navy pleated skirt",
+    "layer": "pieces/bottom/pleated_skirt.webp",
+    "back_layer": null,
+    "z": null,
+    "hides": [],
+    "conflicts": [],
+    "style": [
+      "school"
+    ],
+    "colorable": false,
+    "bbox": [
+      162,
+      468,
+      351,
+      641
+    ]
+  },
+  {
+    "id": "bottom_shorts",
+    "slot": "bottom",
+    "label": "Shorts",
+    "tags": "shorts",
+    "nl": "shorts",
+    "layer": "pieces/bottom/shorts.webp",
+    "back_layer": null,
+    "z": null,
+    "hides": [],
+    "conflicts": [],
+    "style": [
+      "casual",
+      "summer"
+    ],
+    "colorable": false,
+    "bbox": [
+      190,
+      468,
+      323,
+      681
+    ]
+  },
+  {
+    "id": "onepiece_sundress",
+    "slot": "onepiece",
+    "label": "Sundress",
+    "tags": "sundress, yellow dress",
+    "nl": "a yellow sundress",
+    "layer": "pieces/onepiece/sundress.webp",
+    "back_layer": null,
+    "z": null,
+    "hides": [],
+    "conflicts": [
+      "top",
+      "bottom"
+    ],
+    "style": [
+      "summer"
+    ],
+    "colorable": false,
+    "bbox": [
+      162,
+      200,
+      351,
+      701
+    ]
+  },
+  {
+    "id": "legwear_kneesocks",
+    "slot": "legwear",
+    "label": "Knee socks",
+    "tags": "black kneehighs",
+    "nl": "black knee socks",
+    "layer": "pieces/legwear/kneesocks.webp",
+    "back_layer": null,
+    "z": null,
+    "hides": [],
+    "conflicts": [],
+    "style": [
+      "school"
+    ],
+    "colorable": false,
+    "bbox": [
+      205,
+      760,
+      308,
+      931
+    ]
+  },
+  {
+    "id": "footwear_sneakers",
+    "slot": "footwear",
+    "label": "Sneakers",
+    "tags": "sneakers",
+    "nl": "white sneakers",
+    "layer": "pieces/footwear/sneakers.webp",
+    "back_layer": null,
+    "z": null,
+    "hides": [],
+    "conflicts": [],
+    "style": [
+      "casual",
+      "summer"
+    ],
+    "colorable": false,
+    "bbox": [
+      186,
+      932,
+      327,
+      989
+    ]
+  },
+  {
+    "id": "footwear_loafers",
+    "slot": "footwear",
+    "label": "Loafers",
+    "tags": "loafers",
+    "nl": "brown loafers",
+    "layer": "pieces/footwear/loafers.webp",
+    "back_layer": null,
+    "z": null,
+    "hides": [],
+    "conflicts": [],
+    "style": [
+      "school",
+      "formal"
+    ],
+    "colorable": false,
+    "bbox": [
+      188,
+      950,
+      325,
+      989
+    ]
+  },
+  {
+    "id": "footwear_boots",
+    "slot": "footwear",
+    "label": "Boots",
+    "tags": "boots",
+    "nl": "boots",
+    "layer": "pieces/footwear/boots.webp",
+    "back_layer": null,
+    "z": 55,
+    "hides": [
+      "legwear"
+    ],
+    "conflicts": [],
+    "style": [
+      "winter"
+    ],
+    "colorable": false,
+    "bbox": [
+      186,
+      860,
+      327,
+      991
+    ]
+  },
+  {
+    "id": "headwear_beret",
+    "slot": "headwear",
+    "label": "Beret",
+    "tags": "beret",
+    "nl": "a red beret",
+    "layer": "pieces/headwear/beret.webp",
+    "back_layer": null,
+    "z": null,
+    "hides": [],
+    "conflicts": [],
+    "style": [
+      "casual"
+    ],
+    "colorable": false,
+    "bbox": [
+      196,
+      26,
+      323,
+      87
+    ]
+  },
+  {
+    "id": "accessory_ribbon",
+    "slot": "accessory",
+    "label": "Neck ribbon",
+    "tags": "neck ribbon",
+    "nl": "a pink neck ribbon",
+    "layer": "pieces/accessory/ribbon.webp",
+    "back_layer": null,
+    "z": null,
+    "hides": [],
+    "conflicts": [],
+    "style": [
+      "school"
+    ],
+    "colorable": false,
+    "bbox": [
+      224,
+      192,
+      289,
+      225
+    ]
+  }
+]

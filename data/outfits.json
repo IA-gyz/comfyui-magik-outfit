@@ -1,0 +1,61 @@
+[
+  {
+    "id": "casual_01",
+    "label": "Casual tee",
+    "style": [
+      "casual"
+    ],
+    "pieces": {
+      "top": "top_tshirt",
+      "bottom": "bottom_jeans",
+      "footwear": "footwear_sneakers"
+    },
+    "prefix": "",
+    "tile": "outfits/casual_01.webp"
+  },
+  {
+    "id": "school_01",
+    "label": "Sailor uniform",
+    "style": [
+      "school"
+    ],
+    "pieces": {
+      "top": "top_blouse",
+      "bottom": "bottom_pleated_skirt",
+      "legwear": "legwear_kneesocks",
+      "footwear": "footwear_loafers",
+      "accessory": "accessory_ribbon"
+    },
+    "prefix": "school uniform",
+    "tile": "outfits/school_01.webp"
+  },
+  {
+    "id": "summer_01",
+    "label": "Summer dress",
+    "style": [
+      "summer"
+    ],
+    "pieces": {
+      "onepiece": "onepiece_sundress",
+      "headwear": "headwear_beret",
+      "footwear": "footwear_sneakers"
+    },
+    "prefix": "",
+    "tile": "outfits/summer_01.webp"
+  },
+  {
+    "id": "winter_01",
+    "label": "Winter layers",
+    "style": [
+      "winter"
+    ],
+    "pieces": {
+      "top": "top_hoodie",
+      "outerwear": "outerwear_jacket",
+      "bottom": "bottom_jeans",
+      "footwear": "footwear_boots"
+    },
+    "prefix": "",
+    "tile": "outfits/winter_01.webp"
+  }
+]

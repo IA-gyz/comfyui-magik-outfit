@@ -1,0 +1,68 @@
+{
+  "canvas": [
+    512,
+    1024
+  ],
+  "tile": [
+    192,
+    384
+  ],
+  "base": "base/mannequin.webp",
+  "slots": {
+    "back": {
+      "z": 0,
+      "selectable": false
+    },
+    "body": {
+      "z": 10,
+      "selectable": false
+    },
+    "legwear": {
+      "z": 20,
+      "selectable": true
+    },
+    "footwear": {
+      "z": 30,
+      "selectable": true
+    },
+    "bottom": {
+      "z": 40,
+      "selectable": true
+    },
+    "onepiece": {
+      "z": 45,
+      "selectable": true
+    },
+    "top": {
+      "z": 50,
+      "selectable": true
+    },
+    "outerwear": {
+      "z": 60,
+      "selectable": true
+    },
+    "gloves": {
+      "z": 65,
+      "selectable": true
+    },
+    "headwear": {
+      "z": 70,
+      "selectable": true
+    },
+    "accessory": {
+      "z": 80,
+      "selectable": true
+    }
+  },
+  "output_order": [
+    "headwear",
+    "onepiece",
+    "top",
+    "outerwear",
+    "bottom",
+    "legwear",
+    "footwear",
+    "gloves",
+    "accessory"
+  ]
+}
