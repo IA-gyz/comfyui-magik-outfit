@@ -63,6 +63,11 @@ class MagikOutfit(io.ComfyNode):
                 io.String.Input(
                     "prefix", default="",
                     tooltip="Optional text placed before the outfit, e.g. 'wearing'."),
+                io.Combo.Input(
+                    "random_source", options=["catalog", "attire", "any"], default="catalog",
+                    optional=True,
+                    tooltip="What the picker's Random button draws from: catalog outfits, the bundled "
+                            "danbooru attire tag pools (data/attire.json), or either."),
             ],
             outputs=[io.String.Output(id="outfit", display_name="outfit")],
         )
@@ -73,7 +78,7 @@ class MagikOutfit(io.ComfyNode):
         return repr(CATALOG.stamp())
 
     @classmethod
-    def execute(cls, state, format, separator, prefix):
+    def execute(cls, state, format, separator, prefix, random_source="catalog"):
         snap = CATALOG.get()
         outfit_id, overrides = parse_state(state)
         outfit = snap.outfits.get(outfit_id) if outfit_id else None

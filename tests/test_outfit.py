@@ -190,6 +190,108 @@ class BuildStringTests(unittest.TestCase):
         self.assertEqual(text, "hoodie, jacket, open jacket, jeans, denim, boots")
 
 
+class AttireTests(unittest.TestCase):
+    """Tag-only overrides ({"tags": ...}) and the danbooru attire pools (data/attire.json)."""
+
+    def setUp(self):
+        self.cat, self.tmp = fresh_catalog(False)
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        self.snap = self.cat.get()
+        self.mannequin = self.snap.mannequin
+        self.pieces = self.snap.pieces
+
+    def test_public_includes_attire_pools(self):
+        pub = self.cat.public()
+        self.assertIn("attire", pub)
+        for required in ("top", "bottom", "uniform", "traditional", "socks", "shoes", "decoration"):
+            self.assertTrue(pub["attire"]["slots"].get(required), required)
+        self.assertTrue(pub["attire"]["vocabulary"])
+
+    def test_parse_state_tag_entries(self):
+        self.assertEqual(oc.parse_state('{"overrides":{"top":{"tags":"hoodie"}}}'),
+                         (None, {"top": {"tags": "hoodie"}}))
+        self.assertEqual(oc.parse_state('{"overrides":{"top":{"tags":"  a\\tb  "}}}'),
+                         (None, {"top": {"tags": "a b"}}))  # cleaned like piece text
+        for raw in ('{"overrides":{"top":{"tags":5}}}', '{"overrides":{"top":{"tags":"x","extra":1}}}',
+                    '{"overrides":{"top":["tags"]}}', '{"overrides":{"top":{}}}'):
+            self.assertEqual(oc.parse_state(raw), (None, {}), raw)
+
+    def test_resolve_tag_entries(self):
+        sm = oc.resolve(None, {"top": {"tags": "hoodie"}, "onepiece": "onepiece_sundress"}, self.pieces)
+        self.assertEqual(sm, {"top": {"tags": "hoodie"}, "onepiece": "onepiece_sundress"})
+        # an explicit tag-only override is never second-guessed by a conflicting piece
+        sm = oc.resolve(self.snap.outfits["school_01"], {"onepiece": "onepiece_sundress"}, self.pieces)
+        self.assertEqual(sm, {"onepiece": "onepiece_sundress", "legwear": "legwear_kneesocks",
+                              "footwear": "footwear_loafers", "accessory": "accessory_ribbon"})
+        # ...but a tag-only slot of the outfit itself is dropped by the conflict
+        sm = oc.resolve(None, {"top": {"tags": "x"}, "onepiece": "onepiece_sundress"}, self.pieces)
+        self.assertIn("top", sm)  # explicit override wins
+        # a dict inside an outfit's pieces (never produced by the catalog) must not crash resolve
+        sm = oc.resolve({"pieces": {"top": {"tags": "x"}, "onepiece": "onepiece_sundress"}}, {}, self.pieces)
+        self.assertEqual(sm, {"onepiece": "onepiece_sundress"})
+
+    def test_build_string_tag_entries(self):
+        sm = {"top": {"tags": "school_uniform"}, "footwear": "footwear_boots"}
+        self.assertEqual(oc.build_string(sm, None, True, self.mannequin, self.pieces, "tags", ", ", ""),
+                         "school_uniform, boots")
+        self.assertEqual(oc.build_string(sm, None, True, self.mannequin, self.pieces, "natural", ", ", ""),
+                         "school uniform, boots")
+        both = oc.build_string(sm, None, True, self.mannequin, self.pieces, "both", ", ", "")
+        self.assertEqual(both, "school uniform, boots\nschool_uniform, boots")
+
+    def test_draw_list_skips_tag_entries(self):
+        sm = {"top": {"tags": "hoodie"}, "footwear": "footwear_boots"}
+        order = oc.draw_list(self.mannequin, self.pieces, sm)
+        self.assertEqual([rel for rel, _ in order],
+                         ["base/mannequin.webp", "pieces/footwear/boots.webp"])
+
+    def test_draw_attire_deterministic_and_structured(self):
+        import random
+        attire = self.snap.attire
+        a = oc.draw_attire(attire, random.Random(7))
+        self.assertEqual(a, oc.draw_attire(attire, random.Random(7)))  # seeded = reproducible
+        self.assertGreaterEqual(len(a), 2)
+        self.assertTrue(("top" in a and "bottom" in a) or "onepiece" in a)  # exactly one main garment
+        pools = {t for v in attire["slots"].values() for t in v}
+        self.assertTrue(all(t in pools for t in a.values()))
+        for slot in a:
+            self.assertIn(slot, ("top", "bottom", "onepiece", "accessory", "legwear", "footwear"))
+        self.assertEqual(oc.draw_attire({"slots": {}}, random.Random(1)), {})
+        self.assertEqual(oc.draw_attire(None, random.Random(1)), {})
+
+    def test_attire_to_slot_map_matches_pieces_by_tag(self):
+        import random
+        rng = random.Random(3)
+        sm = oc.attire_to_slot_map({"top": "hoodie", "bottom": "jeans", "footwear": "no-such-tag"},
+                                   self.pieces, rng)
+        self.assertEqual(sm["top"], "top_hoodie")
+        self.assertEqual(sm["bottom"], "bottom_jeans")
+        self.assertEqual(sm["footwear"], {"tags": "no-such-tag"})
+        sm = oc.attire_to_slot_map({"legwear": "black_kneehighs"}, self.pieces, rng)  # underscores match spaces
+        self.assertEqual(sm["legwear"], "legwear_kneesocks")
+
+    def test_save_rejects_tag_entries(self):
+        cat, tmp = fresh_catalog(True)
+        self.addCleanup(shutil.rmtree, tmp, True)
+        os.makedirs(cat.user_dir)
+        with self.assertRaises(oc.CatalogError):
+            cat.save_user_outfit("Raw", {"top": {"tags": "hoodie"}})
+
+    def test_broken_or_missing_attire(self):
+        tmp = tempfile.mkdtemp(prefix="magik_builtin_")
+        self.addCleanup(shutil.rmtree, tmp, True)
+        shutil.copytree(os.path.join(PKG_DIR, "data"), os.path.join(tmp, "data"))
+        with open(os.path.join(tmp, "data", "attire.json"), "w", encoding="utf-8") as f:
+            f.write("{not json")
+        snap = oc.Catalog(tmp, None).get()
+        self.assertIsNone(snap.attire)
+        self.assertTrue(any("attire.json" in w for w in snap.warnings))
+        os.remove(os.path.join(tmp, "data", "attire.json"))
+        snap = oc.Catalog(tmp, None).get()
+        self.assertIsNone(snap.attire)
+        self.assertEqual(snap.warnings, [])  # a missing file is normal, not a warning
+
+
 class CatalogTests(unittest.TestCase):
     def test_builtin_loads_clean(self):
         cat, tmp = fresh_catalog(False)

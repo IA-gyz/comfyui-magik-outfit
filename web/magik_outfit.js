@@ -95,6 +95,7 @@ function setupNode(node) {
       separator: optionValue("separator", ", "),
       prefix: optionValue("prefix", ""),
     }),
+    getRandomSource: () => optionValue("random_source", "catalog"),
     onChange: (text) => {
       stateWidget.value = text;
       stateWidget.callback?.(text);

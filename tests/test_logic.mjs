@@ -188,3 +188,22 @@ test("indexCatalog slot order, filters and styles", () => {
     ["casual_01", "summer_01"]);
   assert.equal(L.filterOutfits(all, { query: "zzz" }).length, 0);
 });
+
+test("drawAttire draws a structured outfit from the bundled pools; attireToSlotMap matches pieces by tag", () => {
+  const attire = catalog.attire;
+  assert.ok(attire?.slots?.top?.length && attire.slots.uniform.length);
+  const drawn = L.drawAttire(attire, rng(123));
+  assert.ok(Object.keys(drawn).length >= 2);
+  assert.ok(("top" in drawn && "bottom" in drawn) || "onepiece" in drawn, "exactly one main garment");
+  const pools = new Set(Object.values(attire.slots).flat());
+  for (const tag of Object.values(drawn)) assert.ok(pools.has(tag), `tag from pool: ${tag}`);
+  for (const slot of Object.keys(drawn)) {
+    assert.ok(["top", "bottom", "onepiece", "accessory", "legwear", "footwear"].includes(slot), slot);
+  }
+  assert.deepEqual(L.drawAttire({ slots: {} }, rng(1)), {});
+  assert.deepEqual(L.drawAttire(null, rng(1)), {});
+  const map = L.attireToSlotMap({ top: "hoodie", legwear: "black_kneehighs", footwear: "no-such-tag" }, idx.pieces, rng(5));
+  assert.equal(map.top, "top_hoodie");
+  assert.equal(map.legwear, "legwear_kneesocks"); // underscores match spaces
+  assert.deepEqual(map.footwear, { tags: "no-such-tag" });
+});

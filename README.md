@@ -3,8 +3,9 @@
 Pick a whole outfit on a neutral mannequin, swap any piece, and output the result as a STRING.
 
 Node: **Magik Outfit** (`Magik.Outfit`, category `Magik/Prompt`). Output: `outfit` (STRING).
-Widgets: `format` (tags / natural / both), `separator` (`\n` and `\t` are converted), `prefix`.
-The picker replaces the hidden `state` widget (`{"v":1,"outfit":…,"overrides":{…}}`).
+Widgets: `format` (tags / natural / both), `separator` (`\n` and `\t` are converted), `prefix`,
+`random_source` (what the picker's Random button draws from: `catalog`, `attire` or `any`).
+The picker replaces the hidden `state` widget (`{"v":1,"outfit":…,"overrides":{…}}`; an override value may also be `{"tags": "..."}`, a tag-only slot with no art).
 
 ## Install
 Copy this folder into `ComfyUI/custom_nodes/` and restart. Requires a ComfyUI with the V3 node API.
@@ -27,7 +28,20 @@ Saved outfits go to `<ComfyUI user dir>/magik_outfit/`; extra pieces can be adde
 - `outfit_core.py` catalog, selection (`resolve`), string assembly, compositing (no ComfyUI imports)
 - `outfit_routes.py` aiohttp routes; `magik_outfit.py` the V3 node
 - `web/outfit_logic.js` JS mirror of the Python logic; `web/outfit_ui.js` the picker; `web/magik_outfit.js` wiring
-- `data/` catalog JSON; `assets/` mannequin, piece layers and baked tiles (512x1024 WebP with alpha)
+- `data/` catalog JSON (`mannequin.json`, `pieces.json`, `outfits.json`, `attire.json`);
+  `assets/` mannequin, piece layers and baked tiles (512x1024 WebP with alpha)
+
+## Random sources
+The Random button draws from `random_source`:
+- `catalog` (default): a random outfit tile, respecting the search/style/favorites filters.
+- `attire`: one outfit drawn from the bundled Danbooru attire tag pools (`data/attire.json`,
+  sections of the Danbooru "attire" tag-group wiki; data and generator from
+  [Comfyui-Anima-Tools](https://github.com/nregret/Comfyui-Anima-Tools), MIT, (c) nregret).
+  Exactly one main garment is drawn (a top+bottom pair, a uniform or a traditional outfit),
+  then decoration always and legwear/footwear with 60% probability each. A drawn tag that
+  appears in a catalog piece's `tags` selects that piece (so it shows in the preview); any
+  other slot becomes a tag-only entry `{"tags": "..."}`, shown in accent italics on the chip -
+  it goes into the output string but cannot be baked into a saved outfit tile.
 - `tools/` `make_placeholders.py`, `bake_tiles.py`, `validate_catalog.py`, and the art pipeline (`art.py`, `art_pipeline/`)
 
 ## Making the real art (`tools/art.py`)

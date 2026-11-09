@@ -2,8 +2,8 @@
 // magik_outfit.js wires it into the node; tests drive it under jsdom with mocked deps.
 
 import {
-  buildString, collectStyles, drawList, filterOutfits, indexCatalog, isModified,
-  parseState, pickPiece, resolve, serializeState,
+  attireToSlotMap, buildString, collectStyles, drawAttire, drawList, filterOutfits, indexCatalog,
+  isModified, parseState, pickPiece, resolve, serializeState,
 } from "./outfit_logic.js";
 
 const FAV_KEY = "magik_outfit.favorites";
@@ -60,6 +60,7 @@ export function createOutfitUI(deps) {
     assetURL = (u) => u,
     onChange = () => {},
     getOptions = () => ({ format: "tags", separator: ", ", prefix: "" }),
+    getRandomSource = () => "catalog",
     doc = document,
     storage = null,
     random = Math.random,
@@ -170,6 +171,15 @@ export function createOutfitUI(deps) {
 
   function randomOutfit() {
     if (!catalog) return;
+    const source = getRandomSource();
+    const useAttire = source === "attire" || (source === "any" && random() < 0.5);
+    if (useAttire && catalog.attire?.slots) {
+      const drawn = drawAttire(catalog.attire, random);
+      if (Object.keys(drawn).length) {
+        commit(null, attireToSlotMap(drawn, idx.pieces, random));
+        return;
+      }
+    }
     const list = filterOutfits(catalog.outfits, { query, style: styleFilter, favorites: favOnly ? favorites : null });
     if (list.length) selectOutfit(list[Math.floor(random() * list.length)].id);
   }
@@ -188,13 +198,15 @@ export function createOutfitUI(deps) {
     }
     const { outfit, slotMap, modified } = current();
     const count = Object.keys(slotMap).length;
+    const hasRaw = Object.values(slotMap).some((v) => v !== null && typeof v === "object");
     if (outfit) titleEl.textContent = modified ? `Custom (based on ${outfit.label})` : outfit.label;
     else if (outfitId) titleEl.textContent = `Outfit “${outfitId}” not found`;
     else titleEl.textContent = count ? "Custom set" : "No outfit selected";
     btnReset.disabled = !(outfit && modified);
     btnClear.disabled = count === 0;
-    btnSave.disabled = !(modified && count > 0 && catalog.can_save);
-    btnSave.title = catalog.can_save ? "Keep this custom set as a new outfit tile"
+    btnSave.disabled = !(modified && count > 0 && catalog.can_save) || hasRaw;
+    btnSave.title = hasRaw ? "Tag-only slots have no art to bake; remove them before saving"
+      : catalog.can_save ? "Keep this custom set as a new outfit tile"
       : "Saving is unavailable (no user directory)";
     btnRandom.disabled = false;
   }
@@ -206,19 +218,21 @@ export function createOutfitUI(deps) {
     const { outfit, slotMap } = current();
     for (const slot of idx.slotOrder) {
       if (!idx.bySlot.has(slot)) continue;
-      const piece = slotMap[slot] ? idx.pieces.get(slotMap[slot]) : null;
-      const changed = !!outfit && (slotMap[slot] ?? null) !== (outfit.pieces[slot] ?? null);
+      const value = slotMap[slot];
+      const piece = typeof value === "string" ? idx.pieces.get(value) : null;
+      const rawTags = value && typeof value === "object" ? value.tags : "";
+      const changed = !!outfit && (typeof value === "object" || (value ?? null) !== (outfit.pieces[slot] ?? null));
       const row = el(doc, "div", {
-        class: "mo-chip" + (piece ? "" : " is-empty") + (changed ? " is-changed" : ""),
+        class: "mo-chip" + (piece || rawTags ? "" : " is-empty") + (rawTags ? " is-raw" : "") + (changed ? " is-changed" : ""),
         "data-slot": slot, role: "button", tabindex: "0",
         title: `Change ${slotLabel(slot).toLowerCase()}`,
         onClick: () => openPicker(slot),
         onKeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openPicker(slot); } },
       }, [
         el(doc, "span", { class: "mo-chip-slot", text: slotLabel(slot) }),
-        el(doc, "span", { class: "mo-chip-value", text: piece ? piece.label : "—" }),
+        el(doc, "span", { class: "mo-chip-value", text: piece ? piece.label : (rawTags || "—") }),
       ]);
-      if (piece) {
+      if (piece || rawTags) {
         row.append(el(doc, "button", {
           class: "mo-chip-clear", type: "button", "data-clear": slot, text: "×",
           title: `Remove ${slotLabel(slot).toLowerCase()}`, "aria-label": `Remove ${slotLabel(slot)}`,

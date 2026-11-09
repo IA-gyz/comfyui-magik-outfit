@@ -7,7 +7,7 @@ import sys
 
 from PIL import Image
 
-from _common import ASSETS, load_json
+from _common import ASSETS, DATA, load_json
 
 
 def main():
@@ -36,6 +36,28 @@ def main():
         errors.append("mannequin.json: missing 'base'")
     else:
         check_image(mannequin["base"], "mannequin base")
+
+    attire_path = os.path.join(DATA, "attire.json")
+    if not os.path.isfile(attire_path):
+        warnings.append("attire.json not found; the 'attire' random source is disabled")
+    else:
+        try:
+            attire = load_json("attire.json")
+        except (OSError, ValueError) as e:
+            errors.append(f"attire.json: cannot be read ({e.__class__.__name__})")
+        else:
+            if not isinstance(attire, dict):
+                errors.append("attire.json: expected a JSON object")
+            else:
+                for key, value in attire.items():
+                    if key == "vocabulary":
+                        if not isinstance(value, list) or not all(isinstance(t, str) for t in value):
+                            errors.append("attire.json: 'vocabulary' must be a list of strings")
+                    elif not isinstance(value, list) or not all(isinstance(t, str) and t.strip() for t in value):
+                        errors.append(f"attire.json: pool '{key}' must be a list of non-empty strings")
+                for required in ("top", "bottom", "uniform", "traditional"):
+                    if not (isinstance(attire.get(required), list) and attire[required]):
+                        errors.append(f"attire.json: missing non-empty pool '{required}'")
 
     for slot in mannequin.get("output_order", []):
         if slot not in selectable:

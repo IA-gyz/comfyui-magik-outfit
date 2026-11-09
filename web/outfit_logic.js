@@ -23,6 +23,12 @@ export function cleanText(value, maxlen) {
 }
 
 // ------------------------------------------------------------------ state
+// defineProperty creates a plain own entry even for keys like "__proto__" (a workflow file can be
+// shared, so the state is untrusted); a normal assignment would hit the prototype setter instead.
+function setOwn(obj, key, value) {
+  Object.defineProperty(obj, key, { value, enumerable: true, writable: true, configurable: true });
+}
+
 export function parseState(text) {
   let data;
   try {
@@ -41,7 +47,11 @@ export function parseState(text) {
       // defineProperty creates a plain own entry even for keys like "__proto__" (a workflow file can be
       // shared, so the state is untrusted); a normal assignment would hit the prototype setter instead
       if (pid === null || typeof pid === "string") {
-        Object.defineProperty(overrides, slot, { value: pid, enumerable: true, writable: true, configurable: true });
+        setOwn(overrides, slot, pid);
+      } else if (pid !== null && typeof pid === "object" && !Array.isArray(pid)
+                 && Object.keys(pid).length === 1 && typeof pid.tags === "string") {
+        // a tag-only slot: {"tags": "..."} carries a raw prompt tag instead of a piece id
+        setOwn(overrides, slot, { tags: cleanText(pid.tags, 200) });
       }
     }
   }
@@ -87,13 +97,17 @@ export function resolve(outfit, overrides, pieces) {
       delete result[slot];
       continue;
     }
+    if (typeof pid === "object") { // tag-only slot: explicit content, no piece conflicts
+      setOwn(result, slot, pid);
+      continue;
+    }
     const piece = pieces.get(pid);
     if (!piece || piece.slot !== slot) continue;
-    result[slot] = pid;
+    setOwn(result, slot, pid);
     for (const other of Object.keys(result)) {
       if (other === slot) continue;
       if (overrides[other] !== undefined && overrides[other] !== null) continue;
-      const otherPiece = pieces.get(result[other]);
+      const otherPiece = typeof result[other] === "string" ? pieces.get(result[other]) : undefined;
       if (piece.conflicts.includes(other) || (otherPiece && otherPiece.conflicts.includes(slot))) {
         delete result[other];
       }
@@ -102,10 +116,19 @@ export function resolve(outfit, overrides, pieces) {
   return result;
 }
 
+function sameValue(a, b) {
+  if (a === b) return true;
+  // tag-only entries ({"tags": ...}) are the only object values in a slot map
+  if (a && b && typeof a === "object" && typeof b === "object" && !Array.isArray(a) && !Array.isArray(b)) {
+    return a.tags === b.tags;
+  }
+  return false;
+}
+
 export function sameMap(a, b) {
   const ka = Object.keys(a);
   const kb = Object.keys(b);
-  return ka.length === kb.length && ka.every((k) => a[k] === b[k]);
+  return ka.length === kb.length && ka.every((k) => sameValue(a[k], b[k]));
 }
 
 export function isModified(outfit, slotMap) {
@@ -120,7 +143,7 @@ export function diffOverrides(outfit, slotMap) {
   for (const slot of new Set([...Object.keys(base), ...Object.keys(slotMap)])) {
     const want = slotMap[slot] ?? null;
     const have = base[slot] ?? null;
-    if (want !== have) overrides[slot] = want;
+    if (!sameValue(want, have)) setOwn(overrides, slot, want);
   }
   return overrides;
 }
@@ -157,14 +180,23 @@ export function buildString(slotMap, outfit, modified, catalog, pieces, fmt = "t
   const lead = outfit && !modified ? cleanText(outfit.prefix ?? "", MAX_LABEL) : "";
   const hidden = new Set();
   for (const id of Object.values(slotMap)) {
-    const p = pieces.get(id);
+    const p = typeof id === "string" ? pieces.get(id) : undefined;
     if (p) for (const s of p.hides) hidden.add(s);
   }
   const tags = lead ? [lead] : [];
   const natural = lead ? [lead] : [];
   for (const slot of catalog.output_order || []) {
     if (hidden.has(slot)) continue;
-    const piece = pieces.get(slotMap[slot]);
+    const value = slotMap[slot];
+    if (value && typeof value === "object") {
+      const t = pyStrip(value.tags ?? "");
+      if (t) {
+        tags.push(t);
+        natural.push(t.replaceAll("_", " "));
+      }
+      continue;
+    }
+    const piece = typeof value === "string" ? pieces.get(value) : undefined;
     if (!piece) continue;
     if (pyStrip(piece.tags)) tags.push(pyStrip(piece.tags));
     if (pyStrip(piece.nl)) natural.push(pyStrip(piece.nl));
@@ -181,7 +213,7 @@ export function buildString(slotMap, outfit, modified, catalog, pieces, fmt = "t
 export function drawList(catalog, pieces, slotMap) {
   const zs = {};
   for (const [name, s] of Object.entries(catalog.slots)) zs[name] = s.z;
-  const present = Object.values(slotMap).map((id) => pieces.get(id)).filter(Boolean);
+  const present = Object.values(slotMap).map((id) => (typeof id === "string" ? pieces.get(id) : undefined)).filter(Boolean);
   const hidden = new Set();
   for (const p of present) for (const s of p.hides) hidden.add(s);
   const items = [{ z: zs.body, url: catalog.base_url, piece: null }];
@@ -192,6 +224,56 @@ export function drawList(catalog, pieces, slotMap) {
   }
   items.sort((a, b) => a.z - b.z); // Array.prototype.sort is stable
   return items;
+}
+
+// ---------------------------------------------------------------- attire
+// Danbooru attire tag pools bundled as data/attire.json (from Comfyui-Anima-Tools, MIT, (c) nregret).
+export const ATTIRE_MAIN_VARIANTS = ["top_bottom", "uniform", "traditional"];
+export const ATTIRE_LAYERED = [["decoration", 1.0], ["socks", 0.6], ["shoes", 0.6]];
+export const ATTIRE_SLOT_MAP = {
+  top: "top", bottom: "bottom", socks: "legwear", shoes: "footwear",
+  decoration: "accessory", uniform: "onepiece", traditional: "onepiece",
+};
+
+// Draws one outfit from the pools: exactly one main garment (a top+bottom pair, a uniform or a
+// traditional outfit), then decoration always and legwear/footwear with their probabilities.
+export function drawAttire(attire, rng) {
+  const pools = attire?.slots ?? {};
+  if (!(pools.top?.length && pools.bottom?.length && pools.uniform?.length && pools.traditional?.length)) return {};
+  const pick = (pool) => pool[Math.floor(rng() * pool.length)];
+  const drawn = {};
+  const variant = ATTIRE_MAIN_VARIANTS[Math.floor(rng() * ATTIRE_MAIN_VARIANTS.length)];
+  if (variant === "top_bottom") {
+    drawn[ATTIRE_SLOT_MAP.top] = pick(pools.top);
+    drawn[ATTIRE_SLOT_MAP.bottom] = pick(pools.bottom);
+  } else {
+    drawn[ATTIRE_SLOT_MAP[variant]] = pick(pools[variant]);
+  }
+  for (const [slot, probability] of ATTIRE_LAYERED) {
+    const pool = pools[slot] ?? [];
+    if (!pool.length) continue;
+    if (probability < 1 && rng() >= probability) continue;
+    drawn[ATTIRE_SLOT_MAP[slot]] = pick(pool);
+  }
+  return drawn;
+}
+
+function tagKey(tag) {
+  return String(tag).replaceAll("_", " ").toLowerCase().split(/\s+/).filter(Boolean).join(" ");
+}
+
+// Slots whose drawn tag appears in a catalog piece's tags get that piece; the rest keep the raw tag.
+export function attireToSlotMap(slotTags, pieces, rng) {
+  const out = {};
+  for (const [slot, tag] of Object.entries(slotTags)) {
+    const key = tagKey(tag);
+    const candidates = [...pieces.values()].filter(
+      (p) => p.slot === slot && String(p.tags ?? "").split(",").map(tagKey).includes(key));
+    out[slot] = candidates.length
+      ? (rng ? candidates[Math.floor(rng() * candidates.length)] : candidates[0]).id
+      : { tags: tag };
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------- browsing
