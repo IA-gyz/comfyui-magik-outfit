@@ -66,6 +66,16 @@ The **My presets** tab saves the current selection as a named tag preset
 (`<user dir>/magik_outfit/my_presets/my_presets.json`) with an optional cover image - uploaded
 as WebP (RIFF/WEBP magic checked, <= 4 MB, server-generated uuid name, unreferenced covers
 pruned on save). Clicking a preset applies its tags like a builtin preset.
+
+## Gallery modal
+The **Gallery** button opens a full modal browser driven by an adapter contract
+(`web/gallery_adapters.js` - ported from Comfyui-Anima-Tools' selector descriptors, MIT):
+one tab per kind (Outfits / Presets / My presets), an All / Favorites / Selected rail,
+a collapsible filter panel (style / category chips with counts, favorite groups on the
+Favorites rail), sort + search + active-filter chips, a paged card grid, and a detail
+panel with large preview, click-to-copy prompt tags, facts, favorite toggle, group
+assignment (+ new groups) and Select/Delete. The shell lives in `web/gallery_popup.js`
+and is fully generic - new kinds only need an adapter.
 - `tools/` `make_placeholders.py`, `bake_tiles.py`, `validate_catalog.py`, and the art pipeline (`art.py`, `art_pipeline/`)
 
 ## Making the real art (`tools/art.py`)

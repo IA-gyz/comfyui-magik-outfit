@@ -24,6 +24,6 @@ jobs:
       - name: JS logic parity tests
         run: node --test tests/test_logic.mjs
       - name: JS UI tests (jsdom)
-        run: node --test tests/test_ui.mjs tests/test_wiring.mjs
+        run: node --test tests/test_ui.mjs tests/test_wiring.mjs tests/test_gallery.mjs
         env:
           JSDOM_DIR: ${{ github.workspace }}
