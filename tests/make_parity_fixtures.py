@@ -23,6 +23,10 @@ RAW_STATES = [
     '{"v":1,"outfit":"school_01","overrides":{"top":"top_hoodie","legwear":null}}',
     '{"outfit":"x","overrides":{"a":null,"b":"c","d":1,"e":["x"],"f":{"g":1}}}',
     '{"outfit":null,"overrides":{}}', '{"overrides":{"top":"top_tshirt"}}',
+    '{"v":1,"outfit":null,"overrides":{"top":{"tags":"hoodie"},"bottom":null}}',
+    '{"overrides":{"top":{"tags":"  spaced   out  "}}}',
+    '{"overrides":{"top":{"tags":5}}}', '{"overrides":{"top":{"tags":"x","extra":1}}}',
+    '{"overrides":{"top":{}}}',
 ]
 
 
@@ -50,6 +54,9 @@ def main():
                     overrides[slot] = rng.choice(all_piece_ids)      # maybe the wrong slot
                 elif roll < 0.40:
                     overrides[slot] = "unknown_piece"
+                elif roll < 0.45:
+                    overrides[slot] = {"tags": rng.choice(["hoodie", "school uniform", "blazer",
+                                                           "x" * 250, "", "black_kneehighs"])}
                 else:
                     in_slot = [p["id"] for p in snap.pieces.values() if p["slot"] == slot]
                     if in_slot:
@@ -91,7 +98,9 @@ def main():
         if rng.random() < 0.6:
             doc = {"v": 1, "outfit": rng.choice(outfit_ids + [None, "ghost", 5, ["x"], {}]),
                    "overrides": {rng.choice(selectable + ["cape", "", "__proto__"]):
-                                 rng.choice(all_piece_ids + [None, "junk", 3, ["a"], {}])
+                                 rng.choice(all_piece_ids + [None, "junk", 3, ["a"], {},
+                                                            {"tags": rng.choice(fuzz_pool)},
+                                                            {"tags": 3}, {"tags": "x", "y": 1}])
                                  for _ in range(rng.randint(0, 5))}}
         else:
             doc = junk()

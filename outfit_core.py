@@ -120,8 +120,13 @@ def parse_state(text):
     raw = data.get("overrides")
     if isinstance(raw, dict):
         for slot, pid in raw.items():
-            if isinstance(slot, str) and (pid is None or isinstance(pid, str)):
+            if not isinstance(slot, str):
+                continue
+            if pid is None or isinstance(pid, str):
                 overrides[slot] = pid
+            elif isinstance(pid, dict) and set(pid) == {"tags"} and isinstance(pid["tags"], str):
+                # a tag-only slot: {"tags": "..."} carries a raw prompt tag instead of a piece id
+                overrides[slot] = {"tags": _clean_text(pid["tags"], 200)}
     return outfit_id, overrides
 
 
@@ -134,15 +139,19 @@ def resolve(outfit, overrides, pieces):
       existing piece that lists the chosen piece's slot (a top over a dress
       drops the dress). A slot that is itself overridden with a piece is left
       alone, so explicit UI state is never second-guessed.
+    - A tag-only override {"tags": ...} occupies its slot as-is (no piece, no conflicts).
     - Unknown ids and pieces sent to the wrong slot are ignored.
     """
     overrides = overrides or {}
     result = {}
     if outfit:
-        result = {s: p for s, p in outfit["pieces"].items() if p in pieces}
+        result = {s: p for s, p in outfit["pieces"].items() if isinstance(p, str) and p in pieces}
     for slot, pid in overrides.items():
         if pid is None:
             result.pop(slot, None)
+            continue
+        if isinstance(pid, dict):
+            result[slot] = pid
             continue
         piece = pieces.get(pid)
         if piece is None or piece["slot"] != slot:
@@ -151,7 +160,7 @@ def resolve(outfit, overrides, pieces):
         for other in list(result):
             if other == slot or overrides.get(other) is not None:
                 continue
-            other_piece = pieces.get(result[other])
+            other_piece = pieces.get(result[other]) if isinstance(result[other], str) else None
             if other in piece.get("conflicts", []) or (
                 other_piece and slot in other_piece.get("conflicts", [])
             ):
@@ -174,14 +183,21 @@ def build_string(slot_map, outfit, modified, mannequin, pieces, fmt="tags",
 
     hidden = set()
     for pid in slot_map.values():
-        p = pieces.get(pid)
+        p = pieces.get(pid) if isinstance(pid, str) else None
         if p:
             hidden.update(p.get("hides", []))
     tags, natural = ([lead] if lead else []), ([lead] if lead else [])
     for slot in mannequin.get("output_order", []):
         if slot in hidden:
             continue
-        piece = pieces.get(slot_map.get(slot))
+        value = slot_map.get(slot)
+        if isinstance(value, dict):
+            t = value.get("tags", "").strip()
+            if t:
+                tags.append(t)
+                natural.append(t.replace("_", " "))
+            continue
+        piece = pieces.get(value) if isinstance(value, str) else None
         if not piece:
             continue
         if piece.get("tags", "").strip():
@@ -204,7 +220,7 @@ def build_string(slot_map, outfit, modified, mannequin, pieces, fmt="tags",
 def draw_list(mannequin, pieces, slot_map):
     """Return [(relative_path, source)] in draw order (base first)."""
     zs = {name: s["z"] for name, s in mannequin["slots"].items()}
-    present = [pieces[pid] for pid in slot_map.values() if pid in pieces]
+    present = [pieces[pid] for pid in slot_map.values() if isinstance(pid, str) and pid in pieces]
     hidden = set()
     for p in present:
         hidden.update(p.get("hides", []))
@@ -232,13 +248,70 @@ def compose(canvas_size, order, loader):
     return canvas
 
 
+# ------------------------------------------------------------ attire pools
+# Danbooru attire tag pools bundled as data/attire.json (sections of the Danbooru
+# "attire" tag-group wiki; data and generator from Comfyui-Anima-Tools, MIT,
+# (c) nregret). One main garment plus layered pieces, so drawn slots cannot
+# contradict each other.
+ATTIRE_MAIN_VARIANTS = ("top_bottom", "uniform", "traditional")
+ATTIRE_LAYERED = (("decoration", 1.0), ("socks", 0.6), ("shoes", 0.6))
+ATTIRE_SLOT_MAP = {
+    "top": "top", "bottom": "bottom", "socks": "legwear", "shoes": "footwear",
+    "decoration": "accessory", "uniform": "onepiece", "traditional": "onepiece",
+}
+
+
+def draw_attire(attire, rng):
+    """Draw one outfit from the attire tag pools -> {slot: tag}."""
+    pools = (attire or {}).get("slots") or {}
+    if not (pools.get("top") and pools.get("bottom") and pools.get("uniform") and pools.get("traditional")):
+        return {}
+    drawn = {}
+    variant = rng.choice(ATTIRE_MAIN_VARIANTS)
+    if variant == "top_bottom":
+        drawn[ATTIRE_SLOT_MAP["top"]] = rng.choice(pools["top"])
+        drawn[ATTIRE_SLOT_MAP["bottom"]] = rng.choice(pools["bottom"])
+    else:
+        drawn[ATTIRE_SLOT_MAP[variant]] = rng.choice(pools[variant])
+    for slot, probability in ATTIRE_LAYERED:
+        pool = pools.get(slot) or []
+        if not pool:
+            continue
+        if probability < 1 and rng.random() >= probability:
+            continue
+        drawn[ATTIRE_SLOT_MAP[slot]] = rng.choice(pool)
+    return drawn
+
+
+def _tag_key(tag):
+    return " ".join(str(tag).replace("_", " ").lower().split())
+
+
+def attire_to_slot_map(slot_tags, pieces, rng=None):
+    """Map drawn attire tags to catalog pieces whose tags contain the drawn tag;
+    slots without a matching piece keep the raw tag as {"tags": tag}."""
+    import random
+    rng = rng if rng is not None else random.Random()
+    out = {}
+    for slot, tag in slot_tags.items():
+        key = _tag_key(tag)
+        candidates = [p for p in pieces.values() if p["slot"] == slot
+                      and key in {_tag_key(t) for t in p.get("tags", "").split(",")}]
+        if candidates:
+            out[slot] = rng.choice(candidates)["id"]
+        else:
+            out[slot] = {"tags": tag}
+    return out
+
+
 # ---------------------------------------------------------------- catalog
 class Snapshot:
-    def __init__(self, mannequin, pieces, outfits, warnings):
+    def __init__(self, mannequin, pieces, outfits, warnings, attire=None):
         self.mannequin = mannequin
         self.pieces = pieces      # OrderedDict id -> piece (with 'source')
         self.outfits = outfits    # OrderedDict id -> outfit (with 'source')
         self.warnings = warnings
+        self.attire = attire      # {"slots": {pool: [tag, ...]}, "vocabulary": [...]} or None
 
 
 class Catalog:
@@ -259,7 +332,7 @@ class Catalog:
     # -- file bookkeeping
     def _data_files(self):
         files = [os.path.join(self.builtin_dir, "data", n)
-                 for n in ("mannequin.json", "pieces.json", "outfits.json")]
+                 for n in ("mannequin.json", "pieces.json", "outfits.json", "attire.json")]
         if self.user_dir:
             files += [os.path.join(self.user_dir, n) for n in ("pieces.json", "outfits.json")]
         return files
@@ -311,6 +384,7 @@ class Catalog:
             if required not in slots:
                 raise CatalogError(f"data/mannequin.json: missing the required slot '{required}'")
         selectable = {n for n, s in slots.items() if s.get("selectable")}
+        attire = self._load_attire(warnings)
 
         pieces, outfits = OrderedDict(), OrderedDict()
         for source in SOURCES:
@@ -338,7 +412,29 @@ class Catalog:
                     warnings.append(f"outfit '{outfit['id']}' ({source}) ignored: id already used")
                     continue
                 outfits[outfit["id"]] = outfit
-        return Snapshot(mannequin, pieces, outfits, warnings)
+        return Snapshot(mannequin, pieces, outfits, warnings, attire)
+
+    def _load_attire(self, warnings):
+        """Load the optional data/attire.json tag pools; a broken file is reported, not hidden."""
+        path = os.path.join(self.builtin_dir, "data", "attire.json")
+        if not os.path.exists(path):
+            return None
+        data = _read_json(path, None)
+        if not isinstance(data, dict):
+            warnings.append("attire.json ignored: expected a JSON object")
+            return None
+        slots, vocabulary = {}, []
+        for key, value in data.items():
+            if key == "vocabulary":
+                if isinstance(value, list):
+                    vocabulary = [t.strip() for t in value if isinstance(t, str) and t.strip()]
+                continue
+            if isinstance(value, list):
+                slots[key] = [t.strip() for t in value if isinstance(t, str) and t.strip()]
+        if not slots:
+            warnings.append("attire.json ignored: no slot pools found")
+            return None
+        return {"slots": slots, "vocabulary": vocabulary}
 
     @staticmethod
     def _clean_piece(raw, source, selectable, warnings):
@@ -417,6 +513,7 @@ class Catalog:
             "base_url": _asset_url("builtin", m["base"]),
             "slots": m["slots"], "output_order": m.get("output_order", []),
             "pieces": pieces, "outfits": outfits,
+            "attire": snap.attire,
             "can_save": bool(self.user_dir),
             "warnings": snap.warnings,
         }
@@ -466,6 +563,8 @@ class Catalog:
         snap = self.get()
         chosen = {}
         for slot, pid in pieces_map.items():
+            if isinstance(pid, dict):
+                raise CatalogError(f"slot '{slot}' is a raw tag entry; saved outfits need catalog pieces")
             piece = snap.pieces.get(pid) if isinstance(pid, str) else None
             if piece is None or piece["slot"] != slot:
                 raise CatalogError(f"unknown piece for slot '{slot}'")
