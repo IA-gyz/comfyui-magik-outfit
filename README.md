@@ -5,6 +5,11 @@ Pick a whole outfit on a neutral mannequin, swap any piece, and output the resul
 Node: **Magik Outfit** (`Magik.Outfit`, category `Magik/Prompt`). Output: `outfit` (STRING).
 Widgets: `format` (tags / natural / both), `separator` (`\n` and `\t` are converted), `prefix`,
 `random_source` (what the picker's Random button draws from: `catalog`, `attire` or `any`).
+`randomize` + `seed` make the node draw a random selection **at queue time**
+(same sources; the draw is written back to the hidden state, stored in the saved workflow's
+node properties, recorded in the PNG metadata under `magik_outfit`, and pushed to the open
+picker via the `magik.outfit_resolved` event). `seed` -1 draws fresh every run; a fixed seed
+is reproducible. The catalog fingerprint also covers the inputs, so edits re-run the node.
 The picker replaces the hidden `state` widget (`{"v":1,"outfit":…,"overrides":{…}}`; an override value may also be `{"tags": "..."}`, a tag-only slot with no art).
 
 ## Install

@@ -379,6 +379,33 @@ def _tag_key(tag):
     return " ".join(str(tag).replace("_", " ").lower().split())
 
 
+def random_state_text(catalog, source="catalog", seed=-1):
+    """Draw a random selection and serialize it as the hidden state JSON.
+
+    source: "catalog" (a random outfit id), "attire" (drawn from the danbooru
+    pools, mapped onto pieces where possible), "any" (either). seed < 0 draws
+    fresh every call; a fixed seed makes the draw reproducible. Returns None
+    when there is nothing to draw from.
+    """
+    import random
+    snap = catalog.get() if hasattr(catalog, "get") else catalog
+    rng = random.SystemRandom() if (seed is None or seed < 0) else random.Random(seed)
+    if source not in ("catalog", "attire", "any"):
+        source = "catalog"
+    if source == "any":
+        source = rng.choice(("catalog", "attire"))
+    if source == "attire" and snap.attire:
+        drawn = draw_attire(snap.attire, rng)
+        if drawn:
+            return json.dumps({"v": 1, "outfit": None,
+                               "overrides": attire_to_slot_map(drawn, snap.pieces, rng)},
+                              ensure_ascii=False)
+    ids = list(snap.outfits)
+    if not ids:
+        return None
+    return json.dumps({"v": 1, "outfit": rng.choice(ids), "overrides": {}}, ensure_ascii=False)
+
+
 def preset_to_slot_map(preset, pieces, attire):
     """Turn a clothing preset's tag list into a {slot: piece_id | {"tags": tag}} map.
 
