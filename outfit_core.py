@@ -7,8 +7,10 @@ shared with tools/. The V3 node (magik_outfit.py) and the aiohttp routes
 import json
 import os
 import re
+import shutil
 import threading
 import urllib.parse
+import uuid
 from collections import OrderedDict
 
 from PIL import Image
@@ -18,7 +20,11 @@ SOURCES = ("builtin", "user")
 IMAGE_EXTS = (".webp", ".png")
 MAX_LABEL = 60
 MAX_USER_OUTFITS = 500
+MAX_MY_PRESETS = 200
 ASSET_URL = "/magik/outfit/asset"
+FAVORITE_KINDS = ("outfit", "preset")
+COVER_NAME_RE = re.compile(r"^[0-9a-f]{32}\.webp$")
+COVER_MAX_BYTES = 4 * 1024 * 1024
 
 
 class CatalogError(ValueError):
@@ -74,6 +80,80 @@ def _write_json_atomic(path, obj):
         json.dump(obj, f, indent=2, ensure_ascii=False)
         f.write("\n")
     os.replace(tmp, path)
+
+
+def _write_json_atomic_with_backup(path, obj):
+    """Keep a .bak of the previous file before replacing it (favorites / my presets)."""
+    if os.path.exists(path):
+        try:
+            shutil.copyfile(path, path + ".bak")
+        except OSError:
+            pass
+    _write_json_atomic(path, obj)
+
+
+def _read_json_strict(path, what):
+    """Like _read_list_strict but for a JSON object: refuse to treat a broken file as empty."""
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return {}
+    except (OSError, ValueError) as e:
+        raise CatalogError(f"{what} cannot be read ({e.__class__.__name__}); fix or remove it first") from None
+
+
+# ------------------------------------------------------------- favorites
+def _default_favorites():
+    return {kind: {"groups": [{"id": "default", "name": "Default Favorites", "isSystem": True}], "items": []}
+            for kind in FAVORITE_KINDS}
+
+
+def _normalize_favorites(data):
+    if not isinstance(data, dict):
+        data = {}
+    out = {}
+    for kind in FAVORITE_KINDS:
+        section = data.get(kind)
+        if not isinstance(section, dict):
+            section = {}
+        groups = [g for g in section.get("groups", []) if isinstance(g, dict)
+                  and isinstance(g.get("id"), str) and g["id"] and isinstance(g.get("name"), str)]
+        groups = [{"id": g["id"], "name": _clean_text(g["name"], 40),
+                   "isSystem": bool(g.get("isSystem"))} for g in groups][:50]
+        if not any(g["id"] == "default" for g in groups):
+            groups.insert(0, {"id": "default", "name": "Default Favorites", "isSystem": True})
+        items, seen = [], set()
+        for it in section.get("items", []):
+            if not (isinstance(it, dict) and isinstance(it.get("key"), str) and it["key"] and it["key"] not in seen):
+                continue
+            gids = it.get("groupIds")
+            gids = [g for g in gids if isinstance(g, str) and g] if isinstance(gids, list) else []
+            if not gids:
+                gids = ["default"]
+            seen.add(it["key"])
+            items.append({"key": it["key"][:200], "nickname": _clean_text(it.get("nickname"), 60),
+                          "groupIds": gids[:20]})
+        out[kind] = {"groups": groups, "items": items[:2000]}
+    return out
+
+
+def _clean_my_preset(raw, seen):
+    if not (isinstance(raw, dict) and isinstance(raw.get("name"), str) and raw["name"].strip()
+            and isinstance(raw.get("tags"), str) and raw["tags"].strip()):
+        return None
+    pid = raw.get("id")
+    if not (isinstance(pid, str) and pid and pid not in seen):
+        pid = "mp_" + uuid.uuid4().hex[:12]
+    seen.add(pid)
+    cover = raw.get("cover")
+    return {
+        "id": pid[:64],
+        "name": _clean_text(raw.get("name"), 80),
+        "tags": _clean_text(raw.get("tags"), 400),
+        "note": _clean_text(raw.get("note"), 200),
+        "cover": cover if isinstance(cover, str) and COVER_NAME_RE.match(cover) else None,
+    }
 
 
 def _clean_text(value, maxlen):
@@ -697,3 +777,112 @@ class Catalog:
                     os.remove(tile)
                 except OSError:
                     pass
+
+    # -- favorites (server-persisted, grouped; model from Comfyui-Anima-Tools, MIT)
+    def _favorites_path(self):
+        return os.path.join(self.user_dir, "favorites.json") if self.user_dir else None
+
+    def load_favorites(self):
+        path = self._favorites_path()
+        if path is None or not os.path.exists(path):
+            return _default_favorites()
+        data = _read_json(path, None)  # a broken file reads as None here and is reported, not hidden
+        if data is None:
+            print("[Magik Outfit] warning: favorites.json is not valid JSON; using defaults")
+            return _default_favorites()
+        return _normalize_favorites(data)
+
+    def save_favorites(self, payload):
+        """Merge {kind: {groups, items}} into favorites.json (atomic write + .bak backup)."""
+        if not self.user_dir:
+            raise CatalogError("user directory unavailable; cannot save favorites")
+        if not isinstance(payload, dict):
+            raise CatalogError("favorites payload must be a JSON object")
+        with self._lock:
+            path = self._favorites_path()
+            existing = _normalize_favorites(_read_json_strict(path, "your favorites.json"))
+            merged = existing
+            for kind in FAVORITE_KINDS:
+                if kind in payload:
+                    merged[kind] = _normalize_favorites({kind: payload[kind]})[kind]
+            _write_json_atomic_with_backup(path, merged)
+        return merged
+
+    # -- my presets (the user's own tag presets with optional covers)
+    def _my_presets_dir(self):
+        if not self.user_dir:
+            return None
+        path = os.path.join(self.user_dir, "my_presets")
+        os.makedirs(os.path.join(path, "covers"), exist_ok=True)
+        return path
+
+    def load_my_presets(self):
+        d = self._my_presets_dir()
+        if d is None:
+            return {"available": False, "items": []}
+        data = _read_json(os.path.join(d, "my_presets.json"), {}) or {}
+        items_raw = data.get("items") if isinstance(data, dict) else None
+        if not isinstance(items_raw, list):
+            items_raw = []
+        seen = set()
+        items = []
+        for raw in items_raw:
+            item = _clean_my_preset(raw, seen)
+            if item:
+                item["cover_url"] = f"/magik/outfit/mypresets/cover/{item['cover']}" if item["cover"] else None
+                items.append(item)
+        return {"available": True, "items": items}
+
+    def save_my_presets(self, items):
+        d = self._my_presets_dir()
+        if d is None:
+            raise CatalogError("user directory unavailable; cannot save presets")
+        if not isinstance(items, list):
+            raise CatalogError("my presets payload must be an items list")
+        seen = set()
+        clean = []
+        for raw in items[:MAX_MY_PRESETS]:
+            item = _clean_my_preset(raw, seen)
+            if item:
+                clean.append(item)
+        with self._lock:
+            path = os.path.join(d, "my_presets.json")
+            _write_json_atomic_with_backup(path, {"items": clean})
+            # covers are uploaded right before the save that references them: prune unreferenced ones
+            used = {it["cover"] for it in clean if it["cover"]}
+            covers = os.path.join(d, "covers")
+            for name in os.listdir(covers):
+                if COVER_NAME_RE.match(name) and name not in used:
+                    try:
+                        os.remove(os.path.join(covers, name))
+                    except OSError:
+                        pass
+        for it in clean:
+            it["cover_url"] = f"/magik/outfit/mypresets/cover/{it['cover']}" if it["cover"] else None
+        return {"available": True, "items": clean}
+
+    def save_my_preset_cover(self, data):
+        d = self._my_presets_dir()
+        if d is None:
+            raise CatalogError("user directory unavailable; cannot upload covers")
+        data = bytes(data) if isinstance(data, (bytes, bytearray)) else b""
+        if len(data) > COVER_MAX_BYTES or data[:4] != b"RIFF" or data[8:12] != b"WEBP":
+            raise CatalogError("expected a WebP image up to 4 MB")
+        name = uuid.uuid4().hex + ".webp"
+        with open(os.path.join(d, "covers", name), "wb") as f:
+            f.write(data)
+        return name
+
+    def find_my_preset_cover(self, name):
+        """Absolute path of a preset cover, or None. Guards against traversal."""
+        d = self._my_presets_dir()
+        if d is None or not isinstance(name, str) or not COVER_NAME_RE.match(name):
+            return None
+        root = os.path.realpath(os.path.join(d, "covers"))
+        path = os.path.realpath(os.path.join(root, name))
+        try:
+            if os.path.commonpath([path, root]) != root:
+                return None
+        except ValueError:
+            return None
+        return path if os.path.isfile(path) else None

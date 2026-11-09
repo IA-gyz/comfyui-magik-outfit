@@ -52,6 +52,12 @@ async function postJSON(route, body) {
   return res.json();
 }
 
+async function getJSON(route) {
+  const res = await api.fetchApi(route, { cache: "no-store" });
+  if (!res.ok) throw new Error(await errorText(res));
+  return res.json();
+}
+
 // ------------------------------------------------------------ node setup
 function findWidget(node, name) {
   return node.widgets?.find((w) => w.name === name);
@@ -96,6 +102,15 @@ function setupNode(node) {
       prefix: optionValue("prefix", ""),
     }),
     getRandomSource: () => optionValue("random_source", "catalog"),
+    fetchFavorites: () => getJSON("/magik/outfit/favorites"),
+    saveFavorites: (payload) => postJSON("/magik/outfit/favorites", payload),
+    fetchMyPresets: () => getJSON("/magik/outfit/mypresets"),
+    saveMyPresets: (items) => postJSON("/magik/outfit/mypresets", { items }),
+    uploadMyPresetCover: async (blob) => {
+      const res = await api.fetchApi("/magik/outfit/mypresets/cover", { method: "POST", body: blob });
+      if (!res.ok) throw new Error(await errorText(res));
+      return (await res.json()).cover;
+    },
     onChange: (text) => {
       stateWidget.value = text;
       stateWidget.callback?.(text);

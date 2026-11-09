@@ -63,6 +63,11 @@ export function createOutfitUI(deps) {
     onChange = () => {},
     getOptions = () => ({ format: "tags", separator: ", ", prefix: "" }),
     getRandomSource = () => "catalog",
+    fetchFavorites = null,
+    saveFavorites = null,
+    fetchMyPresets = null,
+    saveMyPresets = null,
+    uploadMyPresetCover = null,
     doc = document,
     storage = null,
     random = Math.random,
@@ -82,6 +87,8 @@ export function createOutfitUI(deps) {
   let page = 0;
   let sortMode = "default";
   let presetCat = null;
+  let myPresets = [];
+  let myPresetsOk = false;
   let openSlot = null;
   let hoverSlot = null;
   let renderToken = 0;
@@ -90,11 +97,81 @@ export function createOutfitUI(deps) {
   const loaded = new Map();       // url -> image
   const alphaCache = new Map();   // url -> Uint8Array | null
   const chipEls = new Map();      // slot -> chip element
-  let favorites = new Set();
-  try {
-    const raw = storage?.getItem(FAV_KEY);
-    if (raw) favorites = new Set(JSON.parse(raw).filter((x) => typeof x === "string"));
-  } catch { /* ignore broken storage */ }
+  // favorites: server-persisted with groups when the API is available, localStorage otherwise
+  let favorites = new Set();       // keys: outfit ids, "preset:<id>"
+  let favRecords = new Map();      // key -> {nickname, groupIds}
+  let favGroups = [{ id: "default", name: "Default Favorites", isSystem: true }];
+  let favGroup = "all";
+  const favoritesApi = Boolean(fetchFavorites && saveFavorites);
+
+  function applyFavoritesData(data) {
+    const groups = data?.outfit?.groups?.length ? data.outfit.groups
+      : data?.preset?.groups?.length ? data.preset.groups : null;
+    if (groups) favGroups = groups;
+    favorites = new Set();
+    favRecords = new Map();
+    for (const [kind, prefix] of [["outfit", ""], ["preset", "preset:"]]) {
+      for (const it of data?.[kind]?.items || []) {
+        const key = prefix + it.key;
+        favorites.add(key);
+        favRecords.set(key, { nickname: it.nickname || "", groupIds: it.groupIds?.length ? it.groupIds : ["default"] });
+      }
+    }
+    renderGroupFilter();
+  }
+
+  function favoritesPayload() {
+    const mk = (prefix) => ({
+      groups: favGroups,
+      items: [...favRecords.entries()]
+        .filter(([k]) => (prefix ? k.startsWith(prefix) : !k.startsWith("preset:")))
+        .map(([k, r]) => ({ key: prefix ? k.slice(prefix.length) : k, nickname: r.nickname, groupIds: r.groupIds })),
+    });
+    return { outfit: mk(null), preset: mk("preset:") };
+  }
+
+  function favKeys() {
+    if (!favOnly) return null;
+    if (favGroup === "all") return favorites;
+    const out = new Set();
+    for (const [key, rec] of favRecords) if (rec.groupIds.includes(favGroup)) out.add(key);
+    return out;
+  }
+
+  async function loadFavoritesData() {
+    if (favoritesApi) {
+      const data = await fetchFavorites().catch(() => null);
+      if (data) { applyFavoritesData(data); return; }
+    }
+    try {
+      const raw = storage?.getItem(FAV_KEY);
+      if (raw) {
+        for (const x of JSON.parse(raw)) {
+          if (typeof x === "string") {
+            favorites.add(x);
+            favRecords.set(x, { nickname: "", groupIds: ["default"] });
+          }
+        }
+      }
+    } catch { /* ignore broken storage */ }
+    renderGroupFilter();
+  }
+
+  async function persistFavorites(snapshot) {
+    if (!favoritesApi) {
+      try { storage?.setItem(FAV_KEY, JSON.stringify([...favorites])); } catch { /* storage may be unavailable */ }
+      return;
+    }
+    const merged = await saveFavorites(favoritesPayload()).catch(() => null);
+    if (merged) { applyFavoritesData(merged); renderGrid(); return; }
+    const s = JSON.parse(snapshot);  // save failed: roll back to the snapshot
+    favorites = new Set(s.fav);
+    favRecords = new Map(s.rec);
+    favGroups = s.groups;
+    try { storage?.setItem(FAV_KEY, JSON.stringify([...favorites])); } catch { /* best effort */ }
+    renderGroupFilter();
+    renderGrid();
+  }
 
   function current() {
     const outfit = idx ? idx.outfits.get(outfitId) ?? null : null;
@@ -140,29 +217,49 @@ export function createOutfitUI(deps) {
 
   const tabOutfits = el(doc, "button", { class: "mo-chipbtn is-on", type: "button", "data-role": "tab-outfits", text: "Outfits", onClick: () => setTab("outfits") });
   const tabPresets = el(doc, "button", { class: "mo-chipbtn", type: "button", "data-role": "tab-presets", text: "Presets", onClick: () => setTab("presets") });
-  const tabsEl = el(doc, "div", { class: "mo-tabs" }, [tabOutfits, tabPresets]);
+  const tabMy = el(doc, "button", { class: "mo-chipbtn", type: "button", "data-role": "tab-my", text: "My presets", hidden: true, onClick: () => setTab("my") });
+  const tabsEl = el(doc, "div", { class: "mo-tabs" }, [tabOutfits, tabPresets, tabMy]);
   const searchEl = el(doc, "input", { class: "mo-input mo-search", type: "search", placeholder: "Search outfits…", "data-role": "search", onInput: () => { query = searchEl.value; page = 0; renderGrid(); } });
   const sortEl = el(doc, "select", { class: "mo-input mo-sort", "data-role": "sort", onChange: () => { sortMode = sortEl.value; page = 0; renderGrid(); } },
     ["default", "name-asc", "name-desc", "fav", "random"].map((v) => el(doc, "option", { value: v, text: v })));
   sortEl.value = "default";
-  const favBtn = el(doc, "button", { class: "mo-chipbtn", type: "button", "data-role": "fav-filter", text: "★ Favorites", "aria-pressed": "false", onClick: () => { favOnly = !favOnly; favBtn.classList.toggle("is-on", favOnly); favBtn.setAttribute("aria-pressed", String(favOnly)); page = 0; renderGrid(); } });
+  const favBtn = el(doc, "button", { class: "mo-chipbtn", type: "button", "data-role": "fav-filter", text: "★ Favorites", "aria-pressed": "false", onClick: () => { favOnly = !favOnly; favBtn.classList.toggle("is-on", favOnly); favBtn.setAttribute("aria-pressed", String(favOnly)); page = 0; renderGroupFilter(); renderGrid(); } });
+  const groupEl = el(doc, "select", { class: "mo-input mo-group", "data-role": "group-filter", hidden: true, onChange: () => { favGroup = groupEl.value; page = 0; renderGrid(); } });
   const stylesEl = el(doc, "div", { class: "mo-styles" });
-  const toolbar = el(doc, "div", { class: "mo-toolbar" }, [searchEl, sortEl, favBtn, stylesEl]);
+  const toolbar = el(doc, "div", { class: "mo-toolbar" }, [searchEl, sortEl, favBtn, groupEl, stylesEl]);
+
+  function renderGroupFilter() {
+    const show = favOnly && favoritesApi && favGroups.length > 1;
+    groupEl.hidden = !show;
+    if (!show) return;
+    groupEl.replaceChildren(...["all", ...favGroups.map((g) => g.id)].map((id) =>
+      el(doc, "option", { value: id, text: id === "all" ? "All favorites" : (favGroups.find((g) => g.id === id)?.name || id) })));
+    if (![...groupEl.options].some((o) => o.value === favGroup)) favGroup = "all";
+    groupEl.value = favGroup;
+  }
   const gridEl = el(doc, "div", { class: "mo-grid" });
   const pagerPrev = el(doc, "button", { class: "mo-btn mo-btn-icon", type: "button", "data-role": "page-prev", text: "‹", title: "Previous page", onClick: () => { if (page > 0) { page--; renderGrid(); } } });
   const pagerNext = el(doc, "button", { class: "mo-btn mo-btn-icon", type: "button", "data-role": "page-next", text: "›", title: "Next page", onClick: () => { page++; renderGrid(); } });
   const pagerLabel = el(doc, "span", { class: "mo-page-label", text: "" });
   const pagerEl = el(doc, "div", { class: "mo-pager", hidden: true }, [pagerPrev, pagerLabel, pagerNext]);
+  const myPresetNameEl = el(doc, "input", { class: "mo-input", type: "text", maxlength: "80", placeholder: "Preset name", "data-role": "mypreset-name" });
+  const myPresetCoverEl = el(doc, "input", { class: "mo-input mo-cover", type: "file", accept: "image/*", "data-role": "mypreset-cover", title: "Optional cover image (converted to WebP)" });
+  const myFormEl = el(doc, "div", { class: "mo-myform", hidden: true }, [
+    myPresetNameEl, myPresetCoverEl,
+    el(doc, "button", { class: "mo-btn", type: "button", "data-action": "save-mypreset", text: "Save current as preset", onClick: () => { doSaveMyPreset(); } }),
+  ]);
   const statusEl = el(doc, "div", { class: "mo-status" });
-  const browser = el(doc, "div", { class: "mo-browser" }, [tabsEl, toolbar, gridEl, pagerEl]);
+  const browser = el(doc, "div", { class: "mo-browser" }, [tabsEl, toolbar, myFormEl, gridEl, pagerEl]);
 
   function setTab(t) {
     if (t === "presets" && !(catalog?.presets?.length)) return;
+    if (t === "my" && !myPresetsOk) return;
     tab = t;
     page = 0;
     tabOutfits.classList.toggle("is-on", tab === "outfits");
     tabPresets.classList.toggle("is-on", tab === "presets");
-    searchEl.placeholder = tab === "presets" ? "Search presets…" : "Search outfits…";
+    tabMy.classList.toggle("is-on", tab === "my");
+    searchEl.placeholder = tab === "outfits" ? "Search outfits…" : "Search presets…";
     renderStyles();
     renderGrid();
   }
@@ -312,6 +409,7 @@ export function createOutfitUI(deps) {
   function renderStyles() {
     stylesEl.replaceChildren();
     if (!catalog) return;
+    if (tab === "my") return;
     if (tab === "presets") {
       for (const c of presetCategories(catalog.presets || [])) {
         stylesEl.append(el(doc, "button", {
@@ -357,18 +455,23 @@ export function createOutfitUI(deps) {
   }
 
   function currentList() {
+    const fset = favKeys();
     if (tab === "presets") {
       return sortList((catalog.presets || []).filter((p) =>
         presetMatches(p, query)
         && (!presetCat || (p.categories || []).includes(presetCat))
-        && (!favOnly || favorites.has(`preset:${p.id}`))), false);
+        && (!fset || fset.has(`preset:${p.id}`))), false);
     }
-    return sortList(filterOutfits(catalog.outfits, { query, style: styleFilter, favorites: favOnly ? favorites : null }), true);
+    if (tab === "my") {
+      return sortList(myPresets.filter((p) => presetMatches(p, query)), false);
+    }
+    return sortList(filterOutfits(catalog.outfits, { query, style: styleFilter, favorites: fset }), true);
   }
 
   function renderGrid() {
     gridEl.replaceChildren();
     if (!catalog) return;
+    myFormEl.hidden = tab !== "my";
     const list = currentList();
     const pages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
     if (page >= pages) page = pages - 1;
@@ -376,11 +479,13 @@ export function createOutfitUI(deps) {
     if (!list.length) {
       const empty = tab === "presets"
         ? ((catalog.presets || []).length ? "No presets match." : "No presets.")
-        : (catalog.outfits.length ? "No outfits match." : "No outfits yet.");
+        : tab === "my"
+          ? (myPresets.length ? "No presets match." : "No saved presets yet — pick a look and use “Save current as preset”.")
+          : (catalog.outfits.length ? "No outfits match." : "No outfits yet.");
       gridEl.append(el(doc, "div", { class: "mo-empty", text: empty }));
     } else {
       for (const item of list.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)) {
-        gridEl.append(tab === "presets" ? makePresetCard(item) : makeTile(item));
+        gridEl.append(tab === "presets" ? makePresetCard(item) : tab === "my" ? makeMyPresetCard(item) : makeTile(item));
       }
     }
     pagerEl.hidden = pages <= 1;
@@ -417,6 +522,65 @@ export function createOutfitUI(deps) {
     setStatus(`Applied “${p.name}”.`, "ok");
   }
 
+  function makeMyPresetCard(p) {
+    return el(doc, "div", {
+      class: "mo-tile mo-preset mo-mypreset", "data-preset-id": p.id, role: "button", tabindex: "0",
+      title: p.tags,
+      onClick: () => applyPreset(p),
+      onKeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); applyPreset(p); } },
+    }, [
+      p.cover_url
+        ? el(doc, "img", { src: assetURL(p.cover_url), alt: p.name, loading: "lazy", decoding: "async", draggable: "false" })
+        : el(doc, "div", { class: "mo-tile-noimg" }),
+      el(doc, "span", { class: "mo-tile-label", text: p.name }),
+      el(doc, "button", {
+        class: "mo-del", type: "button", "data-del-preset": p.id, text: "×", title: "Delete this preset",
+        "aria-label": `Delete ${p.name}`,
+        onClick: (e) => { e.stopPropagation(); removeMyPreset(p.id); },
+      }),
+    ]);
+  }
+
+  async function saveMyPresetsNow() {
+    if (!saveMyPresets) return;
+    const res = await saveMyPresets(myPresets.map(({ cover_url, ...rest }) => rest)).catch(() => null);
+    if (res?.items) myPresets = res.items;
+  }
+
+  async function doSaveMyPreset() {
+    const { slotMap } = current();
+    const tags = buildString(slotMap, null, true, catalog, idx.pieces, "tags", ", ", "");
+    const name = myPresetNameEl.value.trim();
+    if (!name) { setStatus("Give the preset a name.", "error"); return; }
+    if (!tags) { setStatus("Select something first.", "error"); return; }
+    let cover = null;
+    const file = myPresetCoverEl.files?.[0];
+    if (file && uploadMyPresetCover) {
+      try {
+        const bmp = await createImageBitmap(file);
+        const c = doc.createElement("canvas");
+        const scale = Math.min(1, 384 / Math.max(bmp.width, bmp.height));
+        c.width = Math.max(1, Math.round(bmp.width * scale));
+        c.height = Math.max(1, Math.round(bmp.height * scale));
+        c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
+        const blob = await new Promise((res) => c.toBlob(res, "image/webp", 0.9));
+        if (blob) cover = await uploadMyPresetCover(blob);
+      } catch { cover = null; }  // a failed cover upload still saves the preset
+    }
+    myPresets = [...myPresets, { id: `mp_${Date.now().toString(36)}${Math.floor(random() * 1e6).toString(36)}`, name, tags, cover }];
+    await saveMyPresetsNow();
+    myPresetNameEl.value = "";
+    myPresetCoverEl.value = "";
+    setStatus(`Saved preset “${name}”.`, "ok");
+    renderGrid();
+  }
+
+  async function removeMyPreset(id) {
+    myPresets = myPresets.filter((p) => p.id !== id);
+    await saveMyPresetsNow();
+    renderGrid();
+  }
+
   function makeTile(o) {
     const isFav = favorites.has(o.id);
     const tile = el(doc, "div", {
@@ -444,8 +608,15 @@ export function createOutfitUI(deps) {
   }
 
   function toggleFavorite(id) {
-    if (favorites.has(id)) favorites.delete(id); else favorites.add(id);
-    try { storage?.setItem(FAV_KEY, JSON.stringify([...favorites])); } catch { /* storage may be unavailable */ }
+    const snapshot = JSON.stringify({ fav: [...favorites], rec: [...favRecords], groups: favGroups });
+    if (favorites.has(id)) {
+      favorites.delete(id);
+      favRecords.delete(id);
+    } else {
+      favorites.add(id);
+      favRecords.set(id, { nickname: "", groupIds: ["default"] });
+    }
+    persistFavorites(snapshot);  // optimistic; rolls back if the save fails
     renderGrid();
   }
 
@@ -642,7 +813,17 @@ export function createOutfitUI(deps) {
     }
     loadFailed = false;
     tabPresets.hidden = !(catalog.presets && catalog.presets.length);
+    if (fetchMyPresets) {
+      const mp = await fetchMyPresets().catch(() => null);
+      if (mp && mp.available) {
+        myPresets = mp.items || [];
+        myPresetsOk = true;
+      }
+    }
+    tabMy.hidden = !myPresetsOk;
     if (tab === "presets" && tabPresets.hidden) setTab("outfits");
+    if (tab === "my" && !myPresetsOk) setTab("outfits");
+    await loadFavoritesData();
     const n = catalog.warnings?.length ?? 0;
     setStatus(n ? `${n} catalog warning${n > 1 ? "s" : ""}: ${catalog.warnings.join("; ")}` : "", n ? "warn" : "");
     if (styleFilter && !collectStyles(catalog.outfits).includes(styleFilter)) styleFilter = null;

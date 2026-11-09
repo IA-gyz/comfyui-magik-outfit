@@ -79,3 +79,65 @@ def add_routes(routes, catalog):
         except OSError as e:
             return _error(f"could not write outfits: {e.__class__.__name__}", 500)
         return web.json_response({"ok": True})
+
+    @routes.get("/magik/outfit/favorites")
+    async def get_favorites(request):
+        try:
+            return web.json_response(catalog.load_favorites())
+        except CatalogError as e:
+            return _error(str(e), 500)
+
+    @routes.post("/magik/outfit/favorites")
+    async def post_favorites(request):
+        body = await _json_body(request)
+        if body is None:
+            return _error("invalid JSON body")
+        loop = asyncio.get_running_loop()
+        try:
+            merged = await loop.run_in_executor(None, lambda: catalog.save_favorites(body))
+        except CatalogError as e:
+            return _error(str(e))
+        except OSError as e:
+            return _error(f"could not write favorites: {e.__class__.__name__}", 500)
+        return web.json_response(merged)
+
+    @routes.get("/magik/outfit/mypresets")
+    async def get_mypresets(request):
+        try:
+            return web.json_response(catalog.load_my_presets())
+        except CatalogError as e:
+            return _error(str(e), 500)
+
+    @routes.post("/magik/outfit/mypresets")
+    async def post_mypresets(request):
+        body = await _json_body(request)
+        if body is None or not isinstance(body.get("items"), list):
+            return _error("expected {items: [...]}")
+        loop = asyncio.get_running_loop()
+        try:
+            saved = await loop.run_in_executor(None, lambda: catalog.save_my_presets(body["items"]))
+        except CatalogError as e:
+            return _error(str(e))
+        except OSError as e:
+            return _error(f"could not write my presets: {e.__class__.__name__}", 500)
+        return web.json_response(saved)
+
+    @routes.post("/magik/outfit/mypresets/cover")
+    async def post_mypreset_cover(request):
+        data = await request.read()
+        loop = asyncio.get_running_loop()
+        try:
+            name = await loop.run_in_executor(None, lambda: catalog.save_my_preset_cover(data))
+        except CatalogError as e:
+            return _error(str(e))
+        except OSError as e:
+            return _error(f"could not write cover: {e.__class__.__name__}", 500)
+        return web.json_response({"cover": name})
+
+    @routes.get("/magik/outfit/mypresets/cover/{name}")
+    async def get_mypreset_cover(request):
+        path = catalog.find_my_preset_cover(request.match_info["name"])
+        if path is None:
+            return web.Response(status=404)
+        return web.FileResponse(path, headers={"Cache-Control": "public, max-age=31536000, immutable",
+                                               "Content-Type": "image/webp"})
