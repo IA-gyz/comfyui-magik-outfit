@@ -292,6 +292,53 @@ class AttireTests(unittest.TestCase):
         self.assertEqual(snap.warnings, [])  # a missing file is normal, not a warning
 
 
+class PresetTests(unittest.TestCase):
+    """data/presets.json clothing gallery and preset_to_slot_map."""
+
+    def setUp(self):
+        self.cat, self.tmp = fresh_catalog(False)
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        self.snap = self.cat.get()
+
+    def test_presets_load_and_are_served(self):
+        self.assertGreaterEqual(len(self.snap.presets), 400)
+        pub = self.cat.public()
+        self.assertEqual(len(pub["presets"]), len(self.snap.presets))
+        first = pub["presets"][0]
+        for key in ("id", "name", "name_zh", "tags", "categories", "traits", "preview"):
+            self.assertIn(key, first)
+
+    def test_preset_to_slot_map(self):
+        pieces = self.snap.pieces
+        attire = self.snap.attire
+        # a tag that exists in a piece's tags selects the piece
+        sm = oc.preset_to_slot_map({"tags": "hoodie, jeans, sneakers"}, pieces, attire)
+        self.assertEqual(sm, {"top": "top_hoodie", "bottom": "bottom_jeans", "footwear": "footwear_sneakers"})
+        # a tag from the attire pools but not in any piece becomes a tag-only entry in the mapped slot
+        sm = oc.preset_to_slot_map({"tags": "raincoat, pantyhose"}, pieces, attire)
+        self.assertEqual(sm, {"top": {"tags": "raincoat"}, "legwear": {"tags": "pantyhose"}})
+        # tags in neither pieces nor pools are skipped
+        sm = oc.preset_to_slot_map({"tags": "1girl, looking at viewer, smile"}, pieces, attire)
+        self.assertEqual(sm, {})
+        # a one-piece piece drops top/bottom
+        sm = oc.preset_to_slot_map({"tags": "hoodie, sundress"}, pieces, attire)
+        self.assertEqual(sm, {"onepiece": "onepiece_sundress"})
+
+    def test_broken_or_missing_presets(self):
+        tmp = tempfile.mkdtemp(prefix="magik_builtin_")
+        self.addCleanup(shutil.rmtree, tmp, True)
+        shutil.copytree(os.path.join(PKG_DIR, "data"), os.path.join(tmp, "data"))
+        with open(os.path.join(tmp, "data", "presets.json"), "w", encoding="utf-8") as f:
+            f.write("{nope")
+        snap = oc.Catalog(tmp, None).get()
+        self.assertEqual(snap.presets, [])
+        self.assertTrue(any("presets.json" in w for w in snap.warnings))
+        os.remove(os.path.join(tmp, "data", "presets.json"))
+        snap = oc.Catalog(tmp, None).get()
+        self.assertEqual(snap.presets, [])
+        self.assertEqual(snap.warnings, [])  # missing is normal, not a warning
+
+
 class CatalogTests(unittest.TestCase):
     def test_builtin_loads_clean(self):
         cat, tmp = fresh_catalog(False)

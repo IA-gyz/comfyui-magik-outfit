@@ -94,6 +94,18 @@ def _clean_styles(value):
     return out
 
 
+def _clean_labels(value, limit=8, maxlen=60):
+    """Free-form labels (preset categories/traits): keep case and Unicode, just sanitize."""
+    if not isinstance(value, list):
+        return []
+    out = []
+    for item in value[:limit]:
+        text = _clean_text(item, maxlen)
+        if text and text not in out:
+            out.append(text)
+    return out
+
+
 def _asset_url(source, rel):
     return f"{ASSET_URL}/{source}/{urllib.parse.quote(rel)}"
 
@@ -287,6 +299,40 @@ def _tag_key(tag):
     return " ".join(str(tag).replace("_", " ").lower().split())
 
 
+def preset_to_slot_map(preset, pieces, attire):
+    """Turn a clothing preset's tag list into a {slot: piece_id | {"tags": tag}} map.
+
+    A tag that appears in a catalog piece's tags selects that piece (so it shows
+    in the preview); a tag from the attire pools becomes a tag-only entry in the
+    matching slot; anything else (character/pose words) is skipped. A one-piece
+    garment drops top/bottom, like the conflict rules.
+    """
+    pools = (attire or {}).get("slots") or {}
+    pool_slot = {}
+    for pool, tags in pools.items():
+        slot = ATTIRE_SLOT_MAP.get(pool, pool)
+        for t in tags:
+            pool_slot[_tag_key(t)] = slot
+    out = {}
+    for raw in str(preset.get("tags", "")).split(","):
+        tag = raw.strip()
+        if not tag:
+            continue
+        key = _tag_key(tag)
+        piece = next((p for p in pieces.values()
+                      if key in {_tag_key(t) for t in p.get("tags", "").split(",")}), None)
+        if piece is not None:
+            out[piece["slot"]] = piece["id"]
+            continue
+        slot = pool_slot.get(key)
+        if slot:
+            out[slot] = {"tags": tag}
+    if "onepiece" in out:
+        out.pop("top", None)
+        out.pop("bottom", None)
+    return out
+
+
 def attire_to_slot_map(slot_tags, pieces, rng=None):
     """Map drawn attire tags to catalog pieces whose tags contain the drawn tag;
     slots without a matching piece keep the raw tag as {"tags": tag}."""
@@ -306,12 +352,13 @@ def attire_to_slot_map(slot_tags, pieces, rng=None):
 
 # ---------------------------------------------------------------- catalog
 class Snapshot:
-    def __init__(self, mannequin, pieces, outfits, warnings, attire=None):
+    def __init__(self, mannequin, pieces, outfits, warnings, attire=None, presets=None):
         self.mannequin = mannequin
         self.pieces = pieces      # OrderedDict id -> piece (with 'source')
         self.outfits = outfits    # OrderedDict id -> outfit (with 'source')
         self.warnings = warnings
         self.attire = attire      # {"slots": {pool: [tag, ...]}, "vocabulary": [...]} or None
+        self.presets = presets or []  # clothing presets from data/presets.json
 
 
 class Catalog:
@@ -332,7 +379,7 @@ class Catalog:
     # -- file bookkeeping
     def _data_files(self):
         files = [os.path.join(self.builtin_dir, "data", n)
-                 for n in ("mannequin.json", "pieces.json", "outfits.json", "attire.json")]
+                 for n in ("mannequin.json", "pieces.json", "outfits.json", "attire.json", "presets.json")]
         if self.user_dir:
             files += [os.path.join(self.user_dir, n) for n in ("pieces.json", "outfits.json")]
         return files
@@ -385,6 +432,7 @@ class Catalog:
                 raise CatalogError(f"data/mannequin.json: missing the required slot '{required}'")
         selectable = {n for n, s in slots.items() if s.get("selectable")}
         attire = self._load_attire(warnings)
+        presets = self._load_presets(warnings)
 
         pieces, outfits = OrderedDict(), OrderedDict()
         for source in SOURCES:
@@ -412,7 +460,40 @@ class Catalog:
                     warnings.append(f"outfit '{outfit['id']}' ({source}) ignored: id already used")
                     continue
                 outfits[outfit["id"]] = outfit
-        return Snapshot(mannequin, pieces, outfits, warnings, attire)
+        return Snapshot(mannequin, pieces, outfits, warnings, attire, presets)
+
+    def _load_presets(self, warnings):
+        """Load the optional data/presets.json clothing gallery (curated tag sets with previews)."""
+        path = os.path.join(self.builtin_dir, "data", "presets.json")
+        if not os.path.exists(path):
+            return []
+        data = _read_list(path, "presets.json", warnings)
+        out, seen = [], set()
+        for raw in data:
+            if not isinstance(raw, dict):
+                warnings.append("a preset was ignored: not an object")
+                continue
+            pid = raw.get("id")
+            if not (isinstance(pid, str) and pid and pid not in seen):
+                warnings.append("a preset was ignored: missing or duplicate id")
+                continue
+            if not (isinstance(raw.get("name"), str) and raw["name"].strip()
+                    and isinstance(raw.get("tags"), str) and raw["tags"].strip()):
+                warnings.append(f"preset '{pid}' ignored: needs a name and tags")
+                continue
+            seen.add(pid)
+            out.append({
+                "id": pid,
+                "name": _clean_text(raw.get("name"), 80),
+                "name_zh": _clean_text(raw.get("name_zh"), 80),
+                "tags": _clean_text(raw.get("tags"), 400),
+                "tags_zh": _clean_text(raw.get("tags_zh"), 400),
+                "categories": _clean_labels(raw.get("categories")),
+                "traits": _clean_labels(raw.get("traits"), limit=12, maxlen=40),
+                "image": raw.get("image") if isinstance(raw.get("image"), str) and raw["image"] else None,
+                "preview": _clean_text(raw.get("preview"), 300),
+            })
+        return out
 
     def _load_attire(self, warnings):
         """Load the optional data/attire.json tag pools; a broken file is reported, not hidden."""
@@ -513,7 +594,7 @@ class Catalog:
             "base_url": _asset_url("builtin", m["base"]),
             "slots": m["slots"], "output_order": m.get("output_order", []),
             "pieces": pieces, "outfits": outfits,
-            "attire": snap.attire,
+            "attire": snap.attire, "presets": snap.presets,
             "can_save": bool(self.user_dir),
             "warnings": snap.warnings,
         }

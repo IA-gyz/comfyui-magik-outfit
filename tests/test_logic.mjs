@@ -207,3 +207,22 @@ test("drawAttire draws a structured outfit from the bundled pools; attireToSlotM
   assert.equal(map.legwear, "legwear_kneesocks"); // underscores match spaces
   assert.deepEqual(map.footwear, { tags: "no-such-tag" });
 });
+
+test("presetToSlotMap matches Python on sampled presets", () => {
+  const byId = new Map((catalog.presets || []).map((p) => [p.id, p]));
+  assert.ok((fixtures.presets ?? []).length >= 40);
+  for (const c of fixtures.presets) {
+    const p = byId.get(c.id);
+    assert.ok(p, c.id);
+    assert.deepEqual(L.presetToSlotMap(p, idx.pieces, catalog.attire), c.expected, c.id);
+  }
+});
+
+test("preset search matches bilingual names and tags", () => {
+  const all = catalog.presets || [];
+  assert.ok(all.length >= 400);
+  assert.ok(L.presetMatches(all[0], all[0].name.slice(0, 4)));
+  assert.ok(L.presetMatches(all[0], String(all[0].tags).split(",")[0].trim()));
+  assert.ok(!L.presetMatches(all[0], "zzz-no-such-thing"));
+  assert.ok(L.presetCategories(all).length >= 5);
+});

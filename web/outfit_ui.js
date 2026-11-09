@@ -3,11 +3,13 @@
 
 import {
   attireToSlotMap, buildString, collectStyles, drawAttire, drawList, filterOutfits, indexCatalog,
-  isModified, parseState, pickPiece, resolve, serializeState,
+  isModified, parseState, pickPiece, presetCategories, presetMatches, presetToSlotMap, resolve,
+  serializeState,
 } from "./outfit_logic.js";
 
 const FAV_KEY = "magik_outfit.favorites";
 const ALPHA_CACHE_MAX = 24;
+const PAGE_SIZE = 24;
 const SLOT_LABELS = { onepiece: "One-piece" };
 
 export function slotLabel(slot) {
@@ -76,6 +78,10 @@ export function createOutfitUI(deps) {
   let query = "";
   let styleFilter = null;
   let favOnly = false;
+  let tab = "outfits";
+  let page = 0;
+  let sortMode = "default";
+  let presetCat = null;
   let openSlot = null;
   let hoverSlot = null;
   let renderToken = 0;
@@ -132,13 +138,34 @@ export function createOutfitUI(deps) {
   ]);
   saveInput.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); doSave(); } });
 
-  const searchEl = el(doc, "input", { class: "mo-input mo-search", type: "search", placeholder: "Search outfits…", "data-role": "search", onInput: () => { query = searchEl.value; renderGrid(); } });
-  const favBtn = el(doc, "button", { class: "mo-chipbtn", type: "button", "data-role": "fav-filter", text: "★ Favorites", "aria-pressed": "false", onClick: () => { favOnly = !favOnly; favBtn.classList.toggle("is-on", favOnly); favBtn.setAttribute("aria-pressed", String(favOnly)); renderGrid(); } });
+  const tabOutfits = el(doc, "button", { class: "mo-chipbtn is-on", type: "button", "data-role": "tab-outfits", text: "Outfits", onClick: () => setTab("outfits") });
+  const tabPresets = el(doc, "button", { class: "mo-chipbtn", type: "button", "data-role": "tab-presets", text: "Presets", onClick: () => setTab("presets") });
+  const tabsEl = el(doc, "div", { class: "mo-tabs" }, [tabOutfits, tabPresets]);
+  const searchEl = el(doc, "input", { class: "mo-input mo-search", type: "search", placeholder: "Search outfits…", "data-role": "search", onInput: () => { query = searchEl.value; page = 0; renderGrid(); } });
+  const sortEl = el(doc, "select", { class: "mo-input mo-sort", "data-role": "sort", onChange: () => { sortMode = sortEl.value; page = 0; renderGrid(); } },
+    ["default", "name-asc", "name-desc", "fav", "random"].map((v) => el(doc, "option", { value: v, text: v })));
+  sortEl.value = "default";
+  const favBtn = el(doc, "button", { class: "mo-chipbtn", type: "button", "data-role": "fav-filter", text: "★ Favorites", "aria-pressed": "false", onClick: () => { favOnly = !favOnly; favBtn.classList.toggle("is-on", favOnly); favBtn.setAttribute("aria-pressed", String(favOnly)); page = 0; renderGrid(); } });
   const stylesEl = el(doc, "div", { class: "mo-styles" });
-  const toolbar = el(doc, "div", { class: "mo-toolbar" }, [searchEl, favBtn, stylesEl]);
+  const toolbar = el(doc, "div", { class: "mo-toolbar" }, [searchEl, sortEl, favBtn, stylesEl]);
   const gridEl = el(doc, "div", { class: "mo-grid" });
+  const pagerPrev = el(doc, "button", { class: "mo-btn mo-btn-icon", type: "button", "data-role": "page-prev", text: "‹", title: "Previous page", onClick: () => { if (page > 0) { page--; renderGrid(); } } });
+  const pagerNext = el(doc, "button", { class: "mo-btn mo-btn-icon", type: "button", "data-role": "page-next", text: "›", title: "Next page", onClick: () => { page++; renderGrid(); } });
+  const pagerLabel = el(doc, "span", { class: "mo-page-label", text: "" });
+  const pagerEl = el(doc, "div", { class: "mo-pager", hidden: true }, [pagerPrev, pagerLabel, pagerNext]);
   const statusEl = el(doc, "div", { class: "mo-status" });
-  const browser = el(doc, "div", { class: "mo-browser" }, [toolbar, gridEl]);
+  const browser = el(doc, "div", { class: "mo-browser" }, [tabsEl, toolbar, gridEl, pagerEl]);
+
+  function setTab(t) {
+    if (t === "presets" && !(catalog?.presets?.length)) return;
+    tab = t;
+    page = 0;
+    tabOutfits.classList.toggle("is-on", tab === "outfits");
+    tabPresets.classList.toggle("is-on", tab === "presets");
+    searchEl.placeholder = tab === "presets" ? "Search presets…" : "Search outfits…";
+    renderStyles();
+    renderGrid();
+  }
 
   root.append(header, main, picker, savePanel, browser, statusEl);
   root.addEventListener("keydown", (e) => {
@@ -179,6 +206,11 @@ export function createOutfitUI(deps) {
         commit(null, attireToSlotMap(drawn, idx.pieces, random));
         return;
       }
+    }
+    if (tab === "presets") {
+      const list = currentList();
+      if (list.length) applyPreset(list[Math.floor(random() * list.length)]);
+      return;
     }
     const list = filterOutfits(catalog.outfits, { query, style: styleFilter, favorites: favOnly ? favorites : null });
     if (list.length) selectOutfit(list[Math.floor(random() * list.length)].id);
@@ -280,11 +312,21 @@ export function createOutfitUI(deps) {
   function renderStyles() {
     stylesEl.replaceChildren();
     if (!catalog) return;
+    if (tab === "presets") {
+      for (const c of presetCategories(catalog.presets || [])) {
+        stylesEl.append(el(doc, "button", {
+          class: "mo-chipbtn" + (presetCat === c ? " is-on" : ""), type: "button", "data-cat": c,
+          text: c, "aria-pressed": String(presetCat === c),
+          onClick: () => { presetCat = presetCat === c ? null : c; page = 0; renderStyles(); renderGrid(); },
+        }));
+      }
+      return;
+    }
     for (const s of collectStyles(catalog.outfits)) {
       stylesEl.append(el(doc, "button", {
         class: "mo-chipbtn" + (styleFilter === s ? " is-on" : ""), type: "button", "data-style": s,
         text: s, "aria-pressed": String(styleFilter === s),
-        onClick: () => { styleFilter = styleFilter === s ? null : s; renderStyles(); renderGrid(); },
+        onClick: () => { styleFilter = styleFilter === s ? null : s; page = 0; renderStyles(); renderGrid(); },
       }));
     }
   }
@@ -298,16 +340,81 @@ export function createOutfitUI(deps) {
     }
   }
 
+  function sortList(list, isOutfits) {
+    const keyOf = (x) => (isOutfits ? x.id : `preset:${x.id}`);
+    const labelOf = (x) => (isOutfits ? x.label : x.name);
+    const arr = list.slice();
+    if (sortMode === "name-asc") arr.sort((a, b) => labelOf(a).localeCompare(labelOf(b)));
+    else if (sortMode === "name-desc") arr.sort((a, b) => labelOf(b).localeCompare(labelOf(a)));
+    else if (sortMode === "fav") arr.sort((a, b) => (favorites.has(keyOf(b)) ? 1 : 0) - (favorites.has(keyOf(a)) ? 1 : 0));
+    else if (sortMode === "random") {
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+    }
+    return arr;
+  }
+
+  function currentList() {
+    if (tab === "presets") {
+      return sortList((catalog.presets || []).filter((p) =>
+        presetMatches(p, query)
+        && (!presetCat || (p.categories || []).includes(presetCat))
+        && (!favOnly || favorites.has(`preset:${p.id}`))), false);
+    }
+    return sortList(filterOutfits(catalog.outfits, { query, style: styleFilter, favorites: favOnly ? favorites : null }), true);
+  }
+
   function renderGrid() {
     gridEl.replaceChildren();
     if (!catalog) return;
-    const list = filterOutfits(catalog.outfits, { query, style: styleFilter, favorites: favOnly ? favorites : null });
+    const list = currentList();
+    const pages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
+    if (page >= pages) page = pages - 1;
+    if (page < 0) page = 0;
     if (!list.length) {
-      gridEl.append(el(doc, "div", { class: "mo-empty", text: catalog.outfits.length ? "No outfits match." : "No outfits yet." }));
-      return;
+      const empty = tab === "presets"
+        ? ((catalog.presets || []).length ? "No presets match." : "No presets.")
+        : (catalog.outfits.length ? "No outfits match." : "No outfits yet.");
+      gridEl.append(el(doc, "div", { class: "mo-empty", text: empty }));
+    } else {
+      for (const item of list.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)) {
+        gridEl.append(tab === "presets" ? makePresetCard(item) : makeTile(item));
+      }
     }
-    for (const o of list) gridEl.append(makeTile(o));
+    pagerEl.hidden = pages <= 1;
+    pagerLabel.textContent = pages > 1 ? `${page + 1} / ${pages}` : "";
+    pagerPrev.disabled = page <= 0;
+    pagerNext.disabled = page >= pages - 1;
     updateTileSelection();
+  }
+
+  function makePresetCard(p) {
+    const favKey = `preset:${p.id}`;
+    const isFav = favorites.has(favKey);
+    return el(doc, "div", {
+      class: "mo-tile mo-preset", "data-preset-id": p.id, role: "button", tabindex: "0",
+      title: p.name_zh || p.name,
+      onClick: () => applyPreset(p),
+      onKeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); applyPreset(p); } },
+    }, [
+      p.preview
+        ? el(doc, "img", { src: p.preview, alt: p.name, loading: "lazy", decoding: "async", draggable: "false" })
+        : el(doc, "div", { class: "mo-tile-noimg" }),
+      el(doc, "span", { class: "mo-tile-label", text: p.name }),
+      el(doc, "button", {
+        class: "mo-fav" + (isFav ? " is-on" : ""), type: "button", "data-fav": favKey, text: isFav ? "★" : "☆",
+        title: isFav ? "Remove from favorites" : "Add to favorites", "aria-pressed": String(isFav),
+        onClick: (e) => { e.stopPropagation(); toggleFavorite(favKey); },
+      }),
+    ]);
+  }
+
+  function applyPreset(p) {
+    if (!idx) return;
+    commit(null, presetToSlotMap(p, idx.pieces, catalog.attire));
+    setStatus(`Applied “${p.name}”.`, "ok");
   }
 
   function makeTile(o) {
@@ -534,6 +641,8 @@ export function createOutfitUI(deps) {
       return;
     }
     loadFailed = false;
+    tabPresets.hidden = !(catalog.presets && catalog.presets.length);
+    if (tab === "presets" && tabPresets.hidden) setTab("outfits");
     const n = catalog.warnings?.length ?? 0;
     setStatus(n ? `${n} catalog warning${n > 1 ? "s" : ""}: ${catalog.warnings.join("; ")}` : "", n ? "warn" : "");
     if (styleFilter && !collectStyles(catalog.outfits).includes(styleFilter)) styleFilter = null;

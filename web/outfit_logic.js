@@ -276,6 +276,45 @@ export function attireToSlotMap(slotTags, pieces, rng) {
   return out;
 }
 
+// Turns a clothing preset's tag list into a {slot: pieceId | {tags}} map: a tag found in a
+// piece's tags selects the piece, a tag from the attire pools becomes a tag-only entry in the
+// matching slot, anything else is skipped. A one-piece garment drops top/bottom.
+export function presetToSlotMap(preset, pieces, attire) {
+  const pools = attire?.slots ?? {};
+  const poolSlot = {};
+  for (const [pool, tags] of Object.entries(pools)) {
+    const slot = ATTIRE_SLOT_MAP[pool] ?? pool;
+    for (const t of tags) poolSlot[tagKey(t)] = slot;
+  }
+  const out = {};
+  for (const raw of String(preset?.tags ?? "").split(",")) {
+    const tag = raw.trim();
+    if (!tag) continue;
+    const key = tagKey(tag);
+    const piece = [...pieces.values()].find(
+      (p) => String(p.tags ?? "").split(",").map(tagKey).includes(key));
+    if (piece) { out[piece.slot] = piece.id; continue; }
+    const slot = poolSlot[key];
+    if (slot) out[slot] = { tags: tag };
+  }
+  if ("onepiece" in out) { delete out.top; delete out.bottom; }
+  return out;
+}
+
+// Bilingual search: matches name, localized name and tags in both languages.
+export function presetMatches(preset, query) {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  return [preset.name, preset.name_zh, preset.tags, preset.tags_zh]
+    .some((s) => String(s ?? "").toLowerCase().includes(q));
+}
+
+export function presetCategories(presets) {
+  const set = new Set();
+  for (const p of presets) for (const c of p.categories ?? []) set.add(c);
+  return [...set].sort();
+}
+
 // ---------------------------------------------------------------- browsing
 export function filterOutfits(outfits, { query = "", style = null, favorites = null } = {}) {
   const q = query.trim().toLowerCase();

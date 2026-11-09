@@ -123,10 +123,15 @@ def main():
     strips = [{"input": t, "expected": t.strip()} for t in
               ["\ufeffx\ufeff", "\x85x\x85", " \u00a0x\u3000 ", "\x1cx\x1f", "  plain  ", "\u200bx\u200b", ""]]
 
+    preset_cases = []
+    if public.get("presets"):
+        for p in rng.sample(public["presets"], min(40, len(public["presets"]))):
+            preset_cases.append({"id": p["id"], "expected": oc.preset_to_slot_map(p, snap.pieces, snap.attire)})
+
     out = os.path.join(PKG_DIR, "tests", "parity_fixtures.json")
     with open(out, "w", encoding="utf-8") as f:
         json.dump({"catalog": public, "cases": cases, "states": states, "texts": texts, "strips": strips,
-                   "fuzz": fuzz}, f, ensure_ascii=False)
+                   "fuzz": fuzz, "presets": preset_cases}, f, ensure_ascii=False)
         f.write("\n")
     print(f"wrote {len(cases)} cases + {len(states)} state samples -> {out} ({os.path.getsize(out)} bytes)")
 
