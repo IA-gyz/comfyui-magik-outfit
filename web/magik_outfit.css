@@ -97,6 +97,10 @@
 .mo-pager { display: flex; align-items: center; justify-content: center; gap: 6px; }
 .mo-pager[hidden] { display: none; }
 .mo-page-label { color: var(--mo-dim); font-size: 11px; min-width: 40px; text-align: center; }
+.mo-group { flex: 0 0 auto; max-width: 130px; }
+.mo-myform { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+.mo-myform .mo-input[type="text"] { flex: 1 1 120px; }
+.mo-cover { flex: 0 1 150px; font-size: 11px; }
 .mo-toolbar { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
 .mo-input {
   background: var(--mo-bg); color: var(--mo-fg); border: 1px solid var(--mo-border); border-radius: 4px;

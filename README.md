@@ -50,6 +50,17 @@ traits, preview image) from [Comfyui-Anima-Tools](https://github.com/nregret/Com
 category chips, sorting and paging; preview images are referenced from the author's CDN
 (jsDelivr `Dressing-doll` repo) rather than bundled. Clicking a preset maps its tags onto
 catalog pieces where possible (`preset_to_slot_map`) and tag-only slots otherwise.
+
+## Favorites and My presets
+Favorites are stored on the server in `<user dir>/magik_outfit/favorites.json` (per kind
+`outfit` / `preset`: groups + items with `groupIds` and an optional nickname), written
+atomically with a `.bak` backup; the picker commits optimistically and rolls back if the save
+fails. Without a user directory it falls back to localStorage. The toolbar's Favorites filter
+can narrow to one group.
+The **My presets** tab saves the current selection as a named tag preset
+(`<user dir>/magik_outfit/my_presets/my_presets.json`) with an optional cover image - uploaded
+as WebP (RIFF/WEBP magic checked, <= 4 MB, server-generated uuid name, unreferenced covers
+pruned on save). Clicking a preset applies its tags like a builtin preset.
 - `tools/` `make_placeholders.py`, `bake_tiles.py`, `validate_catalog.py`, and the art pipeline (`art.py`, `art_pipeline/`)
 
 ## Making the real art (`tools/art.py`)

@@ -584,6 +584,143 @@ except ImportError:  # pragma: no cover
 
 
 @unittest.skipUnless(HAVE_AIOHTTP, "aiohttp not installed")
+class FavoritesMyPresetsTests(unittest.TestCase):
+    """Server-persisted favorites (groups) and the user's own tag presets with covers."""
+
+    def setUp(self):
+        self.cat, self.tmp = fresh_catalog()
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+
+    def test_favorites_defaults_without_user_dir(self):
+        cat, tmp = fresh_catalog(False)
+        self.addCleanup(shutil.rmtree, tmp, True)
+        fav = cat.load_favorites()
+        self.assertEqual(set(fav), {"outfit", "preset"})
+        self.assertEqual(fav["outfit"]["groups"][0]["id"], "default")
+        self.assertEqual(fav["outfit"]["items"], [])
+
+    def test_favorites_merge_groups_and_backup(self):
+        payload = {"outfit": {"groups": [{"id": "default", "name": "Default Favorites", "isSystem": True},
+                                          {"id": "g1", "name": "School"}],
+                              "items": [{"key": "school_01", "nickname": "", "groupIds": ["g1", "default"]},
+                                        {"key": 5, "groupIds": []}, "junk"]}}
+        merged = self.cat.save_favorites(payload)
+        item = merged["outfit"]["items"][0]
+        self.assertEqual((item["key"], item["groupIds"]), ("school_01", ["g1", "default"]))
+        self.assertEqual(len(merged["outfit"]["items"]), 1)  # junk dropped
+        self.assertEqual([g["id"] for g in merged["outfit"]["groups"]], ["default", "g1"])
+        path = os.path.join(self.cat.user_dir, "favorites.json")
+        self.assertTrue(os.path.exists(path))
+        # second save merges into the first and keeps a .bak of the previous file
+        merged2 = self.cat.save_favorites({"preset": {"items": [{"key": "abc", "groupIds": ["default"]}]}})
+        self.assertIn("school_01", {i["key"] for i in merged2["outfit"]["items"]})
+        self.assertIn("abc", {i["key"] for i in merged2["preset"]["items"]})
+        self.assertTrue(os.path.exists(path + ".bak"))
+        self.assertEqual(self.cat.load_favorites()["preset"]["items"][0]["key"], "abc")
+
+    def test_favorites_save_refuses_broken_file(self):
+        os.makedirs(self.cat.user_dir, exist_ok=True)
+        path = os.path.join(self.cat.user_dir, "favorites.json")
+        with open(path, "w", encoding="utf-8") as f:
+            f.write("{truncated")
+        with self.assertRaises(oc.CatalogError):
+            self.cat.save_favorites({"outfit": {"items": []}})
+        with open(path, encoding="utf-8") as f:
+            self.assertEqual(f.read(), "{truncated")  # untouched
+        # but reading a broken file degrades to defaults instead of failing
+        self.assertEqual(self.cat.load_favorites()["outfit"]["items"], [])
+
+    def test_my_presets_save_load_prune(self):
+        good = {"name": "My look", "tags": "hoodie, jeans", "cover": None}
+        junk = [{"name": "", "tags": "x"}, {"tags": "x"}, "nope", {"name": "ok2", "tags": "boots"}]
+        saved = self.cat.save_my_presets([good] + junk)
+        self.assertEqual(len(saved["items"]), 2)  # junk dropped, missing id generated
+        self.assertTrue(all(i["id"].startswith("mp_") for i in saved["items"]))
+        loaded = self.cat.load_my_presets()
+        self.assertTrue(loaded["available"])
+        self.assertEqual(len(loaded["items"]), 2)
+        self.assertIsNone(loaded["items"][0]["cover_url"])
+
+    def test_my_preset_covers(self):
+        webp = b"RIFF" + b"\x00" * 4 + b"WEBP" + b"\x00" * 32
+        name = self.cat.save_my_preset_cover(webp)
+        self.assertRegex(name, r"^[0-9a-f]{32}\.webp$")
+        self.assertTrue(os.path.isfile(self.cat.find_my_preset_cover(name)))
+        for bad in (b"", b"RIFFxxxxWEBP"[:5], b"RIFF\x00\x00\x00\x00PNG" + b"\x00" * 8, webp + b"x" * (4 * 1024 * 1024)):
+            with self.assertRaises(oc.CatalogError):
+                self.cat.save_my_preset_cover(bad)
+        # traversal / wrong names never resolve
+        for bad_name in ("../../favorites.json", "abc.webp", "../covers/x.webp", ".."):
+            self.assertIsNone(self.cat.find_my_preset_cover(bad_name))
+        # a referenced cover survives a save; an unreferenced one is pruned
+        self.cat.save_my_presets([{"id": "mp_a", "name": "A", "tags": "x", "cover": name}])
+        self.assertIsNotNone(self.cat.find_my_preset_cover(name))
+        orphan = self.cat.save_my_preset_cover(webp)
+        self.cat.save_my_presets([{"id": "mp_a", "name": "A", "tags": "x", "cover": name}])
+        self.assertIsNone(self.cat.find_my_preset_cover(orphan))
+        self.assertIsNotNone(self.cat.find_my_preset_cover(name))
+
+    def test_my_presets_unavailable_without_user_dir(self):
+        cat, tmp = fresh_catalog(False)
+        self.addCleanup(shutil.rmtree, tmp, True)
+        self.assertFalse(cat.load_my_presets()["available"])
+        with self.assertRaises(oc.CatalogError):
+            cat.save_my_presets([])
+        with self.assertRaises(oc.CatalogError):
+            cat.save_my_preset_cover(b"RIFF\x00\x00\x00\x00WEBP" + b"\x00" * 8)
+
+
+class FavoritesRoutesTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        import outfit_routes
+        from aiohttp.test_utils import TestClient, TestServer
+        from aiohttp import web
+        self.cat, self.tmp = fresh_catalog()
+        routes = web.RouteTableDef()
+        outfit_routes.add_routes(routes, self.cat)
+        app = web.Application()
+        app.add_routes(routes)
+        self.client = TestClient(TestServer(app))
+        await self.client.start_server()
+
+    async def asyncTearDown(self):
+        await self.client.close()
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    async def test_favorites_roundtrip(self):
+        r = await self.client.get("/magik/outfit/favorites")
+        self.assertEqual(r.status, 200)
+        self.assertEqual((await r.json())["outfit"]["items"], [])
+        r = await self.client.post("/magik/outfit/favorites", json={"outfit": {"items": [{"key": "winter_01", "groupIds": ["default"]}]}})
+        self.assertEqual(r.status, 200)
+        self.assertEqual((await r.json())["outfit"]["items"][0]["key"], "winter_01")
+        r = await self.client.post("/magik/outfit/favorites", data="not json")
+        self.assertEqual(r.status, 400)
+
+    async def test_mypresets_and_cover_routes(self):
+        r = await self.client.get("/magik/outfit/mypresets")
+        self.assertEqual(r.status, 200)
+        self.assertTrue((await r.json())["available"])
+        webp = b"RIFF" + b"\x00" * 4 + b"WEBP" + b"\x00" * 32
+        r = await self.client.post("/magik/outfit/mypresets/cover", data=webp)
+        self.assertEqual(r.status, 200)
+        cover = (await r.json())["cover"]
+        r = await self.client.post("/magik/outfit/mypresets/cover", data=b"PNG....")
+        self.assertEqual(r.status, 400)
+        r = await self.client.post("/magik/outfit/mypresets", json={"items": [{"id": "mp_x", "name": "X", "tags": "boots", "cover": cover}]})
+        self.assertEqual(r.status, 200)
+        self.assertEqual((await r.json())["items"][0]["cover_url"], f"/magik/outfit/mypresets/cover/{cover}")
+        r = await self.client.get(f"/magik/outfit/mypresets/cover/{cover}")
+        self.assertEqual(r.status, 200)
+        self.assertEqual(r.headers["Content-Type"], "image/webp")
+        r = await self.client.get("/magik/outfit/mypresets/cover/../../favorites.json")
+        self.assertIn(r.status, (404, 400))
+        r = await self.client.get("/magik/outfit/mypresets/cover/deadbeef.webp")
+        self.assertEqual(r.status, 404)
+        r = await self.client.post("/magik/outfit/mypresets", json={"nope": 1})
+        self.assertEqual(r.status, 400)
+
+
 class RouteTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         import outfit_routes
