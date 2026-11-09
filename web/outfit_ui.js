@@ -7,6 +7,8 @@ import {
   serializeState,
 } from "./outfit_logic.js";
 import { t } from "./i18n.js";
+import { buildAdapters } from "./gallery_adapters.js";
+import { openGallery } from "./gallery_popup.js";
 
 const FAV_KEY = "magik_outfit.favorites";
 const ALPHA_CACHE_MAX = 24;
@@ -90,6 +92,7 @@ export function createOutfitUI(deps) {
   let presetCat = null;
   let myPresets = [];
   let myPresetsOk = false;
+  let lastPresetKey = null;
   let openSlot = null;
   let hoverSlot = null;
   let renderToken = 0;
@@ -174,6 +177,30 @@ export function createOutfitUI(deps) {
     renderGrid();
   }
 
+  // facade handed to the gallery popup so it can read/toggle favorites and groups
+  const favStore = {
+    isFav: (key) => favorites.has(key),
+    toggle: (key) => toggleFavorite(key),
+    groups: () => favGroups,
+    groupIdsOf: (key) => favRecords.get(key)?.groupIds || ["default"],
+    setGroups: (key, ids) => {
+      const snapshot = JSON.stringify({ fav: [...favorites], rec: [...favRecords], groups: favGroups });
+      const rec = favRecords.get(key) || { nickname: "", groupIds: ["default"] };
+      rec.groupIds = ids.length ? ids : ["default"];
+      favRecords.set(key, rec);
+      if (!favorites.has(key)) favorites.add(key);
+      persistFavorites(snapshot);
+      renderGrid();
+    },
+    addGroup: (name) => {
+      const snapshot = JSON.stringify({ fav: [...favorites], rec: [...favRecords], groups: favGroups });
+      const id = `g${Date.now().toString(36)}${Math.floor(random() * 1e4).toString(36)}`;
+      favGroups = [...favGroups, { id, name: String(name).slice(0, 40), isSystem: false }];
+      persistFavorites(snapshot);
+      return id;
+    },
+  };
+
   function current() {
     const outfit = idx ? idx.outfits.get(outfitId) ?? null : null;
     const slotMap = idx ? resolve(outfit, overrides, idx.pieces) : {};
@@ -187,8 +214,9 @@ export function createOutfitUI(deps) {
   const btnReset = el(doc, "button", { class: "mo-btn", type: "button", "data-action": "reset", text: t("Reset"), title: t("Back to the outfit as it was"), onClick: () => { const { outfit } = current(); if (outfit) commit(outfit.id, {}); } });
   const btnClear = el(doc, "button", { class: "mo-btn", type: "button", "data-action": "clear", text: t("Clear"), title: t("Remove every piece"), onClick: () => commit(null, {}) });
   const btnSave = el(doc, "button", { class: "mo-btn", type: "button", "data-action": "save", text: t("Save as outfit…"), onClick: openSave });
+  const btnGallery = el(doc, "button", { class: "mo-btn", type: "button", "data-action": "gallery", text: t("Gallery"), title: t("Open the full gallery"), onClick: () => openGalleryPopup() });
   const btnReload = el(doc, "button", { class: "mo-btn mo-btn-icon", type: "button", "data-action": "reload", text: t("↻"), title: t("Reload catalog"), "aria-label": "Reload catalog", onClick: () => loadCatalog(true) });
-  const header = el(doc, "div", { class: "mo-header" }, [titleEl, el(doc, "span", { class: "mo-spacer" }), btnRandom, btnReset, btnClear, btnSave, btnReload]);
+  const header = el(doc, "div", { class: "mo-header" }, [titleEl, el(doc, "span", { class: "mo-spacer" }), btnRandom, btnReset, btnClear, btnSave, btnGallery, btnReload]);
 
   const canvas = el(doc, "canvas", { class: "mo-canvas", width: "256", height: "512" });
   const hint = el(doc, "div", { class: "mo-hint", text: t("") });
@@ -517,18 +545,34 @@ export function createOutfitUI(deps) {
     ]);
   }
 
-  function applyPreset(p) {
+  function applyPreset(p, key = `preset:${p.id}`) {
     if (!idx) return;
+    lastPresetKey = key;
     commit(null, presetToSlotMap(p, idx.pieces, catalog.attire));
     setStatus(t("Applied “{name}”.", { name: p.name }), "ok");
+  }
+
+  function openGalleryPopup() {
+    if (!catalog || !idx) return;
+    const adapters = buildAdapters({
+      catalog, idx, myPresets, assetURL,
+      getOutfitId: () => outfitId,
+      getLastPresetKey: () => lastPresetKey,
+      applyOutfit: (id) => selectOutfit(id),
+      applyPresetItem: (p, key) => applyPreset(p, key),
+      removeOutfit,
+      removeMyPreset,
+      confirmFn,
+    });
+    openGallery({ doc, adapters, favStore, random, onApplied: () => update() });
   }
 
   function makeMyPresetCard(p) {
     return el(doc, "div", {
       class: "mo-tile mo-preset mo-mypreset", "data-preset-id": p.id, role: "button", tabindex: "0",
       title: p.tags,
-      onClick: () => applyPreset(p),
-      onKeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); applyPreset(p); } },
+      onClick: () => applyPreset(p, `my:${p.id}`),
+      onKeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); applyPreset(p, `my:${p.id}`); } },
     }, [
       p.cover_url
         ? el(doc, "img", { src: assetURL(p.cover_url), alt: p.name, loading: "lazy", decoding: "async", draggable: "false" })
