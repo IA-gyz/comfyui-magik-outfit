@@ -174,6 +174,30 @@ function unescapeSep(text) {
   return text.replaceAll("\\n", "\n").replaceAll("\\t", "\t");
 }
 
+const NATURAL_DETERMINERS = new Set(["a", "an", "the", "this", "that", "these", "those", "some", "any", "no",
+  "each", "every", "all", "both", "my", "your", "his", "her", "our", "their"]);
+const PUNCT_EDGES = /^[.,;:!?"'()]+|[.,;:!?"'()]+$/g;
+
+// Give a bare singular countable phrase an "a"/"an" so it can follow "is wearing".
+export function ensureArticle(phrase) {
+  const words = phrase.split(SPACE_RUN).filter(Boolean); // Python str.split()
+  if (!words.length) return phrase;
+  const first = words[0].toLowerCase().replace(PUNCT_EDGES, "");
+  if (!first || NATURAL_DETERMINERS.has(first) || /^[0-9]/.test(first)) return phrase;
+  const last = words[words.length - 1].toLowerCase().replace(PUNCT_EDGES, "");
+  if (last.length > 1 && last.endsWith("s") && !last.endsWith("ss") && !last.endsWith("us")) return phrase;
+  const juSound = ["uni", "use", "usu", "uku", "ula", "uro", "eu", "one", "onc"].some((p) => first.startsWith(p));
+  return (juSound ? "a " : ("aeiou".includes(first[0]) ? "an " : "a ")) + phrase;
+}
+
+// Join natural phrases as one sentence: article on the first/last item, "and" before the last.
+export function naturalSentence(items, sep) {
+  if (!items.length) return "";
+  const parts = [ensureArticle(items[0]), ...items.slice(1, -1)];
+  if (items.length === 1) return parts[0];
+  return parts.join(sep) + " and " + ensureArticle(items[items.length - 1]);
+}
+
 export function buildString(slotMap, outfit, modified, catalog, pieces, fmt = "tags", separator = ", ", prefix = "") {
   if (!FORMATS.includes(fmt)) fmt = "tags";
   const sep = unescapeSep(typeof separator === "string" ? separator : ", ");
@@ -204,8 +228,8 @@ export function buildString(slotMap, outfit, modified, catalog, pieces, fmt = "t
   const pre = typeof prefix === "string" ? pyStrip(prefix) : "";
   const withPrefix = (text) => (pre && text ? `${pre} ${text}` : text);
   if (fmt === "tags") return withPrefix(tags.join(sep));
-  if (fmt === "natural") return withPrefix(natural.join(sep));
-  return withPrefix(natural.join(sep)) + "\n" + tags.join(sep);
+  if (fmt === "natural") return withPrefix(naturalSentence(natural, sep));
+  return withPrefix(naturalSentence(natural, sep)) + "\n" + tags.join(sep);
 }
 
 // ---------------------------------------------------------------- drawing

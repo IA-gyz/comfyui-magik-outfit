@@ -418,10 +418,10 @@ test("updateOptions refreshes the live string preview", { skip }, async () => {
   assert.equal(env.string(), "t-shirt, jeans, denim, sneakers");
   env.options = { format: "natural", separator: " | ", prefix: "wearing" };
   env.ui.updateOptions();
-  assert.equal(env.string(), "wearing a t-shirt | jeans | white sneakers");
+  assert.equal(env.string(), "wearing a t-shirt | jeans and white sneakers");
   env.options = { format: "both", separator: ", ", prefix: "" };
   env.ui.updateOptions();
-  assert.equal(env.string(), "a t-shirt, jeans, white sneakers\nt-shirt, jeans, denim, sneakers");
+  assert.equal(env.string(), "a t-shirt, jeans and white sneakers\nt-shirt, jeans, denim, sneakers");
 });
 
 test("Escape closes the picker and the save panel", { skip }, async () => {

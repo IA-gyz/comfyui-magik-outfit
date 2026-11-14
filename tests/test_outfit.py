@@ -161,8 +161,8 @@ class BuildStringTests(unittest.TestCase):
     def test_tags_natural_both(self):
         tags = ("school uniform, white shirt, collared shirt, pleated skirt, navy skirt, "
                 "black kneehighs, loafers, neck ribbon")
-        nat = ("school uniform, a white blouse, a navy pleated skirt, black knee socks, "
-               "brown loafers, a pink neck ribbon")
+        nat = ("a school uniform, a white blouse, a navy pleated skirt, black knee socks, "
+               "brown loafers and a pink neck ribbon")
         self.assertEqual(self.build("school_01", fmt="tags"), tags)
         self.assertEqual(self.build("school_01", fmt="natural"), nat)
         self.assertEqual(self.build("school_01", fmt="both"), nat + "\n" + tags)
@@ -174,12 +174,28 @@ class BuildStringTests(unittest.TestCase):
 
     def test_widget_prefix_and_separator(self):
         self.assertEqual(self.build("casual_01", fmt="natural", prefix=" wearing "),
-                         "wearing a t-shirt, jeans, white sneakers")
+                         "wearing a t-shirt, jeans and white sneakers")
         # the separator joins pieces; a piece's own tags ("jeans, denim") stay together
         self.assertEqual(self.build("casual_01", fmt="tags", separator=" | "),
                          "t-shirt | jeans, denim | sneakers")
         self.assertEqual(self.build("casual_01", fmt="tags", separator="\\n"),
                          "t-shirt\njeans, denim\nsneakers")
+
+    def test_natural_sentence_articles_and_and(self):
+        # tag-only slots (attire/preset draws) get the same sentence treatment
+        sm = {"onepiece": {"tags": "slavic clothes"}, "top": {"tags": "cross-laced slit"},
+              "accessory": {"tags": "surgical mask"}}
+        self.assertEqual(oc.build_string(sm, None, True, self.m, self.p, "natural", ", ", ""),
+                         "slavic clothes, cross-laced slit and a surgical mask")
+        # a/an follows the following word; plurals and existing determiners stay untouched
+        for tag, expected in (("orange dress", "an orange dress"), ("uniform", "a uniform"),
+                              ("jeans", "jeans"), ("a red beret", "a red beret"), ("3 stripes", "3 stripes")):
+            sm = {"top": {"tags": tag}}
+            self.assertEqual(oc.build_string(sm, None, True, self.m, self.p, "natural", ", ", ""), expected, tag)
+        # two items: "and" joins them, no trailing separator
+        sm = {"top": {"tags": "hoodie"}, "footwear": {"tags": "boots"}}
+        self.assertEqual(oc.build_string(sm, None, True, self.m, self.p, "natural", ", ", ""),
+                         "a hoodie and boots")
 
     def test_empty_selection(self):
         self.assertEqual(self.build(None, {}, fmt="tags"), "")
@@ -235,9 +251,9 @@ class AttireTests(unittest.TestCase):
         self.assertEqual(oc.build_string(sm, None, True, self.mannequin, self.pieces, "tags", ", ", ""),
                          "school_uniform, boots")
         self.assertEqual(oc.build_string(sm, None, True, self.mannequin, self.pieces, "natural", ", ", ""),
-                         "school uniform, boots")
+                         "a school uniform and boots")
         both = oc.build_string(sm, None, True, self.mannequin, self.pieces, "both", ", ", "")
-        self.assertEqual(both, "school uniform, boots\nschool_uniform, boots")
+        self.assertEqual(both, "a school uniform and boots\nschool_uniform, boots")
 
     def test_draw_list_skips_tag_entries(self):
         sm = {"top": {"tags": "hoodie"}, "footwear": "footwear_boots"}
@@ -919,7 +935,7 @@ class NodeTests(unittest.TestCase):
         state = json.dumps({"v": 1, "outfit": "school_01", "overrides": {"top": "top_hoodie"}})
         out = self.node.execute(state=state, format="natural", separator=", ", prefix="wearing")
         self.assertEqual(out.result, ("wearing a hoodie, a navy pleated skirt, black knee socks, "
-                                      "brown loafers, a pink neck ribbon",))
+                                      "brown loafers and a pink neck ribbon",))
         empty = self.node.execute(state=self.pkg.magik_outfit.DEFAULT_STATE, format="tags",
                                   separator=", ", prefix="")
         self.assertEqual(empty.result, ("",))

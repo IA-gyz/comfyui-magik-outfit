@@ -215,11 +215,11 @@ test("format / separator / prefix widgets keep the live string in step and keep 
   const [, format, separator, prefix] = node.widgets;
   format.value = "natural"; separator.value = " | "; prefix.value = "wearing";
   format.callback("natural");
-  assert.equal(q(node, ".mo-string").textContent, "wearing a t-shirt | jeans | white sneakers");
+  assert.equal(q(node, ".mo-string").textContent, "wearing a t-shirt | jeans and white sneakers");
   assert.equal(format.calls, 1, "the widget's original callback must still run");
   prefix.value = "";
   prefix.callback("");
-  assert.equal(q(node, ".mo-string").textContent, "a t-shirt | jeans | white sneakers");
+  assert.equal(q(node, ".mo-string").textContent, "a t-shirt | jeans and white sneakers");
 });
 
 test("save and delete POST JSON through api.fetchApi; server errors reach the user", { skip }, async () => {

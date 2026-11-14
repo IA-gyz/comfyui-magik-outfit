@@ -260,6 +260,39 @@ def resolve(outfit, overrides, pieces):
     return result
 
 
+_NATURAL_DETERMINERS = frozenset({
+    "a", "an", "the", "this", "that", "these", "those", "some", "any", "no",
+    "each", "every", "all", "both", "my", "your", "his", "her", "our", "their",
+})
+_PUNCT_EDGES = ".,;:!?\"'()"
+
+
+def _ensure_article(phrase):
+    """Give a bare singular countable phrase an "a"/"an" so it can follow "is wearing"."""
+    words = phrase.split()
+    if not words:
+        return phrase
+    first = words[0].lower().strip(_PUNCT_EDGES)
+    if not first or first in _NATURAL_DETERMINERS or first[0].isdigit():
+        return phrase
+    last = words[-1].lower().strip(_PUNCT_EDGES)
+    if len(last) > 1 and last.endswith("s") and not last.endswith(("ss", "us")):
+        return phrase
+    if first.startswith(("uni", "use", "usu", "uku", "ula", "uro", "eu", "one", "onc")):
+        return "a " + phrase
+    return ("an " if first[0] in "aeiou" else "a ") + phrase
+
+
+def _natural_sentence(items, sep):
+    """Join natural phrases as one sentence: article on the first/last item, "and" before the last."""
+    if not items:
+        return ""
+    parts = [_ensure_article(items[0])] + list(items[1:-1])
+    if len(items) == 1:
+        return parts[0]
+    return sep.join(parts) + " and " + _ensure_article(items[-1])
+
+
 def build_string(slot_map, outfit, modified, mannequin, pieces, fmt="tags",
                  separator=", ", prefix=""):
     """Assemble the output STRING from a resolved {slot: piece_id} map.
@@ -305,8 +338,8 @@ def build_string(slot_map, outfit, modified, mannequin, pieces, fmt="tags",
     if fmt == "tags":
         return with_prefix(sep.join(tags))
     if fmt == "natural":
-        return with_prefix(sep.join(natural))
-    return with_prefix(sep.join(natural)) + "\n" + sep.join(tags)
+        return with_prefix(_natural_sentence(natural, sep))
+    return with_prefix(_natural_sentence(natural, sep)) + "\n" + sep.join(tags)
 
 
 def draw_list(mannequin, pieces, slot_map):
