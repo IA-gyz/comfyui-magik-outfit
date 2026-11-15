@@ -1,7 +1,7 @@
 {
   "Magik.Outfit": {
     "display_name": "Magik 套装",
-    "description": "在中性人台上挑选一整套套装，然后替换任意单品。以文本描述和预览图输出套装。",
+    "description": "在中性人台上挑选一整套套装，然后替换任意单品。以文本描述、预览图和 JSON 格式的已选单品输出套装。",
     "inputs": {
       "state": {
         "name": "state",
@@ -38,6 +38,9 @@
       },
       "image": {
         "name": "人台"
+      },
+      "selection": {
+        "name": "已选单品"
       }
     }
   }

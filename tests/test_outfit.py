@@ -937,7 +937,7 @@ class NodeTests(unittest.TestCase):
         self.assertEqual([i.id for i in s.inputs], ["state", "format", "separator", "prefix"])
         self.assertTrue(s.inputs[0].socketless)
         self.assertEqual(s.inputs[1].options, ["tags", "natural", "both"])
-        self.assertEqual([o.id for o in s.outputs], ["outfit", "image"])
+        self.assertEqual([o.id for o in s.outputs], ["outfit", "image", "selection"])
 
     def test_execute(self):
         state = json.dumps({"v": 1, "outfit": "school_01", "overrides": {"top": "top_hoodie"}})
@@ -946,10 +946,16 @@ class NodeTests(unittest.TestCase):
                                        "brown loafers and a pink neck ribbon")
         # the image output is the composited mannequin: (1, H, W, C)
         self.assertEqual(tuple(out.result[1].shape), (1, 1024, 512, 3))
+        # the selection output is the resolved {slot: piece_id} map as JSON
+        self.assertEqual(json.loads(out.result[2]),
+                         {"top": "top_hoodie", "bottom": "bottom_pleated_skirt",
+                          "legwear": "legwear_kneesocks", "footwear": "footwear_loafers",
+                          "accessory": "accessory_ribbon"})
         empty = self.node.execute(state=self.pkg.magik_outfit.DEFAULT_STATE, format="tags",
                                   separator=", ", prefix="")
         self.assertEqual(empty.result[0], "")
         self.assertEqual(tuple(empty.result[1].shape), (1, 1024, 512, 3))
+        self.assertEqual(json.loads(empty.result[2]), {})
         junk = self.node.execute(state="not json", format="tags", separator=", ", prefix="")
         self.assertEqual(junk.result[0], "")
 
@@ -965,6 +971,7 @@ class NodeTests(unittest.TestCase):
                                     prefix=rng.choice(["", "wearing", "  ", "\U0001F457", "x" * 500]))
             self.assertIsInstance(out.result[0], str)
             self.assertEqual(tuple(out.result[1].shape), (1, 1024, 512, 3))
+            self.assertIsInstance(json.loads(out.result[2]), dict)
 
     def test_fingerprint_and_entrypoint(self):
         fp = self.node.fingerprint_inputs(state="{}", format="tags", separator=", ", prefix="")

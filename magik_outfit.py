@@ -3,6 +3,7 @@
 The node itself is small: a hidden JSON `state` widget (written by the JS picker)
 plus a few text-assembly widgets. All logic lives in outfit_core.py.
 """
+import json
 import os
 
 from comfy_api.latest import ComfyExtension, io
@@ -151,7 +152,8 @@ class MagikOutfit(io.ComfyNode):
             display_name="Magik Outfit",
             category="Magik/Prompt",
             description="Pick a whole outfit on a neutral mannequin, then swap any piece. "
-                        "Outputs the outfit as a text description and as a preview image.",
+                        "Outputs the outfit as a text description, a preview image, and the "
+                        "resolved selection as JSON.",
             search_aliases=["outfit", "clothes", "clothing", "wardrobe", "mannequin"],
             inputs=[
                 io.String.Input(
@@ -182,7 +184,8 @@ class MagikOutfit(io.ComfyNode):
                     tooltip="Seed for randomize: -1 draws fresh every run; a fixed seed is reproducible."),
             ],
             outputs=[io.String.Output(id="outfit", display_name="outfit"),
-                     io.Image.Output(id="image", display_name="mannequin")],
+                     io.Image.Output(id="image", display_name="mannequin"),
+                     io.String.Output(id="selection", display_name="selection")],
         )
 
     @classmethod
@@ -201,7 +204,8 @@ class MagikOutfit(io.ComfyNode):
         modified = outfit is None or slot_map != outfit["pieces"]
         text = build_string(slot_map, outfit, modified, snap.mannequin, snap.pieces,
                             format, separator, prefix)
-        return io.NodeOutput(text, _image_tensor(CATALOG.composite(slot_map, snap)))
+        selection = json.dumps(slot_map, ensure_ascii=False, sort_keys=True)
+        return io.NodeOutput(text, _image_tensor(CATALOG.composite(slot_map, snap)), selection)
 
 
 class MagikOutfitExtension(ComfyExtension):
