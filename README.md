@@ -137,7 +137,7 @@ CI (`.github/workflows/tests.yml`) runs the Python and node test suites on ubunt
 `publish_action.yml` publishes to the Comfy registry when `pyproject.toml` changes.
 
 ## Tests
-    python -m unittest discover -s tests -v          # Pillow, numpy, aiohttp (node tests need ComfyUI's comfy_api)
+    python -m unittest discover -s tests -v          # Pillow, numpy, aiohttp (node tests use ComfyUI's comfy_api if present, else tests/stubs/)
     python tests/make_parity_fixtures.py             # only after changing the catalog or the Python logic
                                                      # (includes 400 fuzzed hostile states and Unicode text cases)
     node --test tests/test_logic.mjs                 # JS == Python on 800 randomized cases

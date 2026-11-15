@@ -2,8 +2,9 @@
 
     python -m unittest discover -s tests -v
 
-Core + route tests need only Pillow and aiohttp. Node tests need comfy_api
-(i.e. a ComfyUI checkout on sys.path) and are skipped otherwise.
+Core + route tests need only Pillow and aiohttp. Node tests use the real
+comfy_api when it is importable (inside ComfyUI) and otherwise fall back to
+the bundled stub in tests/stubs/, so they also run in CI.
 """
 import importlib
 import json
@@ -909,11 +910,17 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
 try:
     from comfy_api.latest import io as comfy_io  # noqa: F401
     HAVE_COMFY_API = True
-except Exception:  # pragma: no cover
-    HAVE_COMFY_API = False
+except Exception:
+    # No ComfyUI checkout on sys.path: use the bundled stub so the node tests run in CI too.
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "stubs"))
+    try:
+        from comfy_api.latest import io as comfy_io  # noqa: F401
+        HAVE_COMFY_API = True
+    except Exception:  # pragma: no cover
+        HAVE_COMFY_API = False
 
 
-@unittest.skipUnless(HAVE_COMFY_API, "comfy_api not importable (run inside ComfyUI to enable)")
+@unittest.skipUnless(HAVE_COMFY_API, "neither comfy_api nor tests/stubs importable")
 class NodeTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
