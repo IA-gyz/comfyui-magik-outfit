@@ -2,7 +2,7 @@
 
 Pick a whole outfit on a neutral mannequin, swap any piece, and output the result as a STRING.
 
-Node: **Magik Outfit** (`Magik.Outfit`, category `Magik/Prompt`). Outputs: `outfit` (STRING) and `image` (IMAGE, the mannequin wearing the picked outfit).
+Node: **Magik Outfit** (`Magik.Outfit`, category `Magik/Prompt`). Outputs: `outfit` (STRING), `image` (IMAGE, the mannequin wearing the picked outfit) and `selection` (STRING, the resolved `{slot: piece}` map as JSON).
 Widgets: `format` (tags / natural / both), `separator` (`\n` and `\t` are converted), `prefix`,
 `random_source` (what the picker's Random button draws from: `catalog`, `attire` or `any`).
 `randomize` + `seed` make the node draw a random selection **at queue time**
