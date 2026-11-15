@@ -912,7 +912,8 @@ try:
     HAVE_COMFY_API = True
 except Exception:
     # No ComfyUI checkout on sys.path: use the bundled stub so the node tests run in CI too.
-    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "stubs"))
+    # Appended (not prepended) so a real installed torch still wins over the stub's torch.py.
+    sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "stubs"))
     try:
         from comfy_api.latest import io as comfy_io  # noqa: F401
         HAVE_COMFY_API = True
@@ -936,18 +937,21 @@ class NodeTests(unittest.TestCase):
         self.assertEqual([i.id for i in s.inputs], ["state", "format", "separator", "prefix"])
         self.assertTrue(s.inputs[0].socketless)
         self.assertEqual(s.inputs[1].options, ["tags", "natural", "both"])
-        self.assertEqual([o.id for o in s.outputs], ["outfit"])
+        self.assertEqual([o.id for o in s.outputs], ["outfit", "image"])
 
     def test_execute(self):
         state = json.dumps({"v": 1, "outfit": "school_01", "overrides": {"top": "top_hoodie"}})
         out = self.node.execute(state=state, format="natural", separator=", ", prefix="wearing")
-        self.assertEqual(out.result, ("wearing a hoodie, a navy pleated skirt, black knee socks, "
-                                      "brown loafers and a pink neck ribbon",))
+        self.assertEqual(out.result[0], "wearing a hoodie, a navy pleated skirt, black knee socks, "
+                                       "brown loafers and a pink neck ribbon")
+        # the image output is the composited mannequin: (1, H, W, C)
+        self.assertEqual(tuple(out.result[1].shape), (1, 1024, 512, 3))
         empty = self.node.execute(state=self.pkg.magik_outfit.DEFAULT_STATE, format="tags",
                                   separator=", ", prefix="")
-        self.assertEqual(empty.result, ("",))
+        self.assertEqual(empty.result[0], "")
+        self.assertEqual(tuple(empty.result[1].shape), (1, 1024, 512, 3))
         junk = self.node.execute(state="not json", format="tags", separator=", ", prefix="")
-        self.assertEqual(junk.result, ("",))
+        self.assertEqual(junk.result[0], "")
 
     def test_execute_survives_hostile_widget_values(self):
         import random
@@ -960,6 +964,7 @@ class NodeTests(unittest.TestCase):
                                     separator=rng.choice([", ", "\\n", "", "\t\t", "\u2028"]),
                                     prefix=rng.choice(["", "wearing", "  ", "\U0001F457", "x" * 500]))
             self.assertIsInstance(out.result[0], str)
+            self.assertEqual(tuple(out.result[1].shape), (1, 1024, 512, 3))
 
     def test_fingerprint_and_entrypoint(self):
         fp = self.node.fingerprint_inputs(state="{}", format="tags", separator=", ", prefix="")

@@ -39,6 +39,14 @@ def _register_routes():
 _register_routes()
 
 
+def _image_tensor(img):
+    """PIL image -> torch tensor (1, H, W, C) float32 in [0, 1], as ComfyUI IMAGE outputs expect."""
+    import numpy as np
+    import torch
+    arr = np.asarray(img.convert("RGB"), dtype=np.float32)[None] / 255.0
+    return torch.from_numpy(arr)
+
+
 def _truthy(value, default=False):
     if isinstance(value, bool):
         return value
@@ -143,7 +151,7 @@ class MagikOutfit(io.ComfyNode):
             display_name="Magik Outfit",
             category="Magik/Prompt",
             description="Pick a whole outfit on a neutral mannequin, then swap any piece. "
-                        "Outputs the outfit as a text description.",
+                        "Outputs the outfit as a text description and as a preview image.",
             search_aliases=["outfit", "clothes", "clothing", "wardrobe", "mannequin"],
             inputs=[
                 io.String.Input(
@@ -173,7 +181,8 @@ class MagikOutfit(io.ComfyNode):
                     "seed", default=-1, min=-1, max=2147483647, optional=True,
                     tooltip="Seed for randomize: -1 draws fresh every run; a fixed seed is reproducible."),
             ],
-            outputs=[io.String.Output(id="outfit", display_name="outfit")],
+            outputs=[io.String.Output(id="outfit", display_name="outfit"),
+                     io.Image.Output(id="image", display_name="mannequin")],
         )
 
     @classmethod
@@ -192,7 +201,7 @@ class MagikOutfit(io.ComfyNode):
         modified = outfit is None or slot_map != outfit["pieces"]
         text = build_string(slot_map, outfit, modified, snap.mannequin, snap.pieces,
                             format, separator, prefix)
-        return io.NodeOutput(text)
+        return io.NodeOutput(text, _image_tensor(CATALOG.composite(slot_map, snap)))
 
 
 class MagikOutfitExtension(ComfyExtension):

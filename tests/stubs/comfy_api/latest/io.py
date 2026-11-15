@@ -2,8 +2,8 @@
 
 
 class NodeOutput:
-    def __init__(self, result):
-        self.result = result if isinstance(result, tuple) else (result,)
+    def __init__(self, *args):
+        self.result = args
 
 
 class _Input:
@@ -44,6 +44,10 @@ class Boolean(_Type):
 
 
 class Int(_Type):
+    pass
+
+
+class Image(_Type):
     pass
 
 

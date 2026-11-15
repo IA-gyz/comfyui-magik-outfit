@@ -1,7 +1,7 @@
 {
   "Magik.Outfit": {
     "display_name": "Magik Outfit",
-    "description": "Pick a whole outfit on a neutral mannequin, then swap any piece. Outputs the outfit as a text description.",
+    "description": "Pick a whole outfit on a neutral mannequin, then swap any piece. Outputs the outfit as a text description and as a preview image.",
     "inputs": {
       "state": {
         "name": "state",
@@ -35,6 +35,9 @@
     "outputs": {
       "outfit": {
         "name": "outfit"
+      },
+      "image": {
+        "name": "mannequin"
       }
     }
   }
